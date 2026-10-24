@@ -68,7 +68,7 @@ async function push(uids, msg) {
   if (!pushReady || !uids.length) return;
   const { data: subs, error } = await admin.from("push_subs").select("endpoint, p256dh, auth").in("uid", uids);
   if (error || !subs || !subs.length) return;
-  const payload = JSON.stringify({ title: msg.title, body: msg.body, tag: msg.tag || "manhunt", r: msg.r || "", url: `/?g=${msg.code}${msg.r ? "&r=" + msg.r : ""}` });
+  const payload = JSON.stringify({ title: msg.title, body: msg.body, tag: msg.tag || "manhunt", r: msg.r || "", url: `./?g=${msg.code}${msg.r ? "&r=" + msg.r : ""}` });
   const dead = [];
   await Promise.all(subs.map(async (s) => {
     try {
