@@ -9,6 +9,8 @@ self.addEventListener("push", (event) => {
     // avvisa anche le pagine aperte (per inviare subito la posizione se è un ping)
     const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     wins.forEach((w) => w.postMessage({ type: "push", data: d }));
+    const ios = /iPhone|iPad|iPod/.test(self.navigator.userAgent);
+    if (!ios && wins.some((w) => w.visibilityState === "visible" && w.focused)) return;
     await self.registration.showNotification(d.title || "Manhunt", {
       body: d.body || "",
       icon: "icon-192.png",

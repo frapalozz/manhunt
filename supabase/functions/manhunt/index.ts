@@ -289,8 +289,11 @@ async function mutate(code, fn) {
 async function push(uids, msg) {
   uids = [...new Set(uids)].filter(Boolean);
   if (!pushReady || !uids.length) return;
-  const { data: subs, error } = await admin.from("push_subs").select("endpoint, p256dh, auth").in("uid", uids);
-  if (error || !subs || !subs.length) return;
+  const { data: all, error } = await admin.from("push_subs").select("endpoint, p256dh, auth, seen_at").in("uid", uids);
+  if (error || !all) return;
+  // chi ha l'app aperta in questo momento vede già tutto a schermo: niente notifica
+  const subs = all.filter((s) => !s.seen_at || Date.parse(s.seen_at) < Date.now() - 20000);
+  if (!subs.length) return;
   const payload = JSON.stringify({ title: msg.title, body: msg.body, tag: msg.tag || "manhunt", r: msg.r || "", url: `./?g=${msg.code}${msg.r ? "&r=" + msg.r : ""}` });
   const dead = [];
   await Promise.all(subs.map(async (s) => {

@@ -65,6 +65,8 @@ create table if not exists public.push_subs (
   created_at timestamptz not null default now()
 );
 create index if not exists push_subs_uid on public.push_subs(uid);
+-- ultima volta che il sito era aperto in primo piano: in quel caso niente notifiche push
+alter table public.push_subs add column if not exists seen_at timestamptz;
 
 -- l'orario della posizione lo mette il database, non il telefono
 create or replace function public.mh_set_at() returns trigger language plpgsql as $$
