@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <style>
 /* Layout: one-screen field app. Home/lobby scroll as a single column; the game is HUD / map / bottom sheet. */
 :root{
@@ -64,8 +64,8 @@ input,select{width:100%;background:var(--bg);border:1.5px solid var(--line);bord
 label{font-weight:700;font-size:14px;color:var(--muted)}
 
 /* home */
-.brand h1{font-size:clamp(84px,30vw,150px);line-height:.82;font-weight:900;text-transform:uppercase;margin-top:6px}
-.brand h1 span{color:var(--blaze)}
+.brand h1{font-size:clamp(64px,26vw,140px);line-height:.85;font-weight:900;text-transform:uppercase;margin-top:6px;overflow-wrap:anywhere}
+.brand h1 span{color:var(--blaze);display:block}
 .lede{color:var(--muted);margin:14px 0 0;max-width:40ch}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:12px}
 .row{display:flex;gap:10px;align-items:stretch}
@@ -126,14 +126,16 @@ button.chip{cursor:pointer}
 .pingbar.hider .fill{background:var(--hide)}
 .pingbar.soon .fill{background:var(--danger)}
 .pingbar b{color:var(--fg);font-variant-numeric:tabular-nums}
-.mapwrap{position:relative;flex:1;min-height:160px}
-#map{position:absolute;inset:0;background:var(--surface)}
+.mapwrap{position:relative;flex:1;min-height:160px;overflow:hidden;isolation:isolate}
+#map{position:absolute;inset:0;background:var(--surface);overflow:hidden}
 .fab{position:absolute;right:max(12px,env(safe-area-inset-right,0px));bottom:12px;z-index:500;appearance:none;border:1.5px solid var(--line);background:var(--bg);color:var(--fg);border-radius:999px;padding:10px 16px;font-weight:700;cursor:pointer}
-.overlay{position:absolute;inset:0;z-index:600;background:color-mix(in srgb,var(--bg) 88%,transparent);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;padding:24px}
-.overlay h2{font-size:44px;text-transform:uppercase;line-height:.95}
-.overlay .big{font-family:var(--f-display);font-size:96px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:var(--blaze)}
-.overlay p{color:var(--muted);max-width:30ch;margin:0}
-.sheet{max-height:46%;overflow-y:auto;background:var(--surface);border-top:1px solid var(--line);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px calc(14px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;-webkit-overflow-scrolling:touch}
+.overlay{position:absolute;z-index:600;top:12px;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));background:color-mix(in srgb,var(--bg) 92%,transparent);border:1px solid var(--line);border-radius:14px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 14px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.overlay .eyebrow{grid-column:1/-1}
+.overlay h2{font-size:30px;text-transform:uppercase;line-height:1}
+.overlay .big{font-family:var(--f-display);font-size:44px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:var(--blaze);grid-row:2/4;grid-column:2}
+.overlay p{color:var(--muted);margin:0;font-size:13px;grid-column:1}
+.mapmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:var(--muted);z-index:400}
+.sheet{position:relative;z-index:1;max-height:46%;overflow-y:auto;background:var(--surface);border-top:1px solid var(--line);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px calc(14px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;-webkit-overflow-scrolling:touch}
 .sheet h3{font-size:18px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .targets{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .targets li{display:grid;grid-template-columns:12px 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
@@ -252,7 +254,7 @@ button.chip{cursor:pointer}
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="config.js"></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="vendor/leaflet/leaflet.js"></script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -639,10 +639,25 @@ function renderEnd() {
 /* ============ mappa ============ */
 let map = null, layer = null, fitted = false, mapQueued = false;
 function initMap() {
-  if (map || typeof L === "undefined") return;
-  map = L.map("map", { zoomControl: false }).setView([41.9, 12.5], 15);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { maxZoom: 20, subdomains: "abcd", attribution: "© OpenStreetMap © CARTO" }).addTo(map);
+  if (map) return;
+  const el = $("#map");
+  if (typeof L === "undefined") {
+    el.innerHTML = `<div class="mapmsg">Mappa non disponibile: ricarica la pagina. Distanze e direzioni restano nella lista qui sotto.</div>`;
+    return;
+  }
+  map = L.map(el, { zoomControl: false }).setView(myPos ? [myPos.lat, myPos.lng] : [41.9, 12.5], myPos ? 17 : 6);
+  // mappa principale CARTO; se le sue immagini non arrivano passo a OpenStreetMap
+  const carto = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { maxZoom: 20, subdomains: "abcd", attribution: "© OpenStreetMap © CARTO" });
+  let errors = 0, switched = false;
+  carto.on("tileerror", () => {
+    if (switched || ++errors < 4) return;
+    switched = true; map.removeLayer(carto);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+  });
+  carto.addTo(map);
   layer = L.layerGroup().addTo(map);
+  // la mappa nasce nascosta e il pannello sotto cambia altezza: ricalcolo le dimensioni
+  if ("ResizeObserver" in window) new ResizeObserver(() => map.invalidateSize()).observe(el);
   setInterval(scheduleMap, 5000);
 }
 function scheduleMap() { if (mapQueued) return; mapQueued = true; requestAnimationFrame(() => { mapQueued = false; drawMap(); }); }
