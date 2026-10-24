@@ -171,6 +171,6 @@ $$);
 --  tick_secret:  la stessa frase segreta che metterai nel segreto TICK_SECRET della Edge Function
 -- =====================================================================
 insert into mh_private.config (key, value) values
-  ('function_url', 'https://ID-PROGETTO.supabase.co/functions/v1/manhunt'),
-  ('tick_secret', 'CAMBIA-QUESTA-FRASE-SEGRETA')
+  ('function_url', 'https://blbnagoiefvtlolopzqd.supabase.co/functions/v1/manhunt'),
+  ('tick_secret', '9ULoBFMySAYlTY5-AuhpNS2no7hr2StB')
 on conflict (key) do update set value = excluded.value;
