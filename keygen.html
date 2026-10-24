@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chiavi notifiche Manhunt</title>
+<style>
+  :root{--bg:#12160f;--fg:#eef1e4;--muted:#9ba68e;--line:#343e2d;--blaze:#ff6b1a;color-scheme:dark}
+  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+  main{max-width:640px;margin:0 auto;padding:32px max(16px,env(safe-area-inset-left,0px)) 48px;display:grid;gap:18px}
+  h1{margin:0;font-size:28px}
+  p{margin:0;color:var(--muted)}
+  button{background:var(--blaze);color:#1a0d03;border:0;border-radius:10px;padding:14px 18px;font-weight:700;font-size:16px;cursor:pointer}
+  label{font-weight:700}
+  textarea{width:100%;box-sizing:border-box;background:#0c0f0a;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font:13px ui-monospace,Consolas,monospace;resize:vertical}
+  .row{display:grid;gap:6px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Chiavi per le notifiche</h1>
+  <p>Apri questo file con Chrome o Edge sul PC e premi il pulsante. Le chiavi vengono create sul tuo computer: nessun dato esce da qui.</p>
+  <button id="go">Genera chiavi</button>
+  <div class="row"><label for="pub">VAPID_PUBLIC_KEY → in web/config.js e nei segreti della Edge Function</label><textarea id="pub" rows="3" readonly></textarea></div>
+  <div class="row"><label for="priv">VAPID_PRIVATE_KEY → solo nei segreti della Edge Function (non metterla nel sito)</label><textarea id="priv" rows="2" readonly></textarea></div>
+  <div class="row"><label for="secret">TICK_SECRET → nei segreti della Edge Function e in schema.sql (frase casuale)</label><textarea id="secret" rows="2" readonly></textarea></div>
+</main>
+<script>
+const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const fromB64u = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+document.getElementById("go").addEventListener("click", async () => {
+  const kp = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+  const jwk = await crypto.subtle.exportKey("jwk", kp.privateKey);
+  const raw = new Uint8Array(65); raw[0] = 4; raw.set(fromB64u(jwk.x), 1); raw.set(fromB64u(jwk.y), 33);
+  document.getElementById("pub").value = b64u(raw);
+  document.getElementById("priv").value = jwk.d;
+  document.getElementById("secret").value = b64u(crypto.getRandomValues(new Uint8Array(24)));
+});
+</script>
+</body>
+</html>
