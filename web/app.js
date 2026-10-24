@@ -90,7 +90,14 @@ async function act(op, extra = {}) {
     }
     uid = session.user.id;
   } catch (e) {
-    $("#boot-msg").textContent = "Non riesco a collegarmi al server. Controlla la connessione e config.js. Se l'errore persiste, attiva l'accesso anonimo in Supabase.";
+    const m = String((e && (e.message || e.msg || e.error_description)) || e || "");
+    let hint = "Controlla la connessione e config.js.";
+    if (/anonymous/i.test(m)) hint = "L'accesso anonimo è disattivato: Supabase → Authentication → Sign In / Providers → attiva \"Allow anonymous sign-ins\" e salva.";
+    else if (/api key|apikey|jwt|invalid.*key|unauthorized|401/i.test(m)) hint = "La chiave in config.js (supabaseKey) non è valida: copia la chiave publishable (o anon public) da Project Settings → API Keys.";
+    else if (/failed to fetch|networkerror|load failed|fetch/i.test(m)) hint = "Non raggiungo l'indirizzo in config.js (supabaseUrl). Controlla che sia https://ID-PROGETTO.supabase.co e che il progetto non sia in pausa.";
+    else if (/rate limit|too many/i.test(m)) hint = "Troppi accessi nuovi dalla stessa rete: aspetta un po' o alza il limite in Authentication → Rate Limits.";
+    else if (/captcha/i.test(m)) hint = "In Supabase è attivo il CAPTCHA: disattivalo in Authentication → Attack Protection.";
+    $("#boot-msg").textContent = `Non riesco a collegarmi al server. ${hint} (Dettaglio: ${m || "sconosciuto"})`;
     return;
   }
   await initPush();
