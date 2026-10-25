@@ -104,9 +104,27 @@ async function createGame(uid, data) {
   throw new GameError("unavailable", "Non riesco a creare un codice, riprova.");
 }
 
+/** Ultime posizioni note dei giocatori di una partita: { uid: {lat, lng, acc, at} } */
+async function loadLocs(code) {
+  const { data, error } = await admin.from("locs").select("uid, lat, lng, acc, at, t").eq("code", code);
+  if (error) throw error;
+  const out = {};
+  for (const l of data || []) out[l.uid] = { lat: l.lat, lng: l.lng, acc: l.acc || 0, at: l.at ? Date.parse(l.at) : l.t };
+  return out;
+}
+/** Centro della zona: media delle posizioni recenti dei giocatori (il punto di ritrovo). */
+function zoneCenter(locs, players, now) {
+  const fresh = Object.entries(locs).filter(([id, l]) => players[id] && l.at && now - l.at < 15 * 60000);
+  if (!fresh.length) return null;
+  const lat = fresh.reduce((a, [, l]) => a + l.lat, 0) / fresh.length;
+  const lng = fresh.reduce((a, [, l]) => a + l.lng, 0) / fresh.length;
+  return { lat: +lat.toFixed(6), lng: +lng.toFixed(6) };
+}
+
 async function gameAction(uid, data) {
   const code = cleanCode(data.code);
   const now = Date.now();
+  const locs = data.op === "start" ? await loadLocs(code) : null;
   const { g, result } = await mutate(code, (g) => {
     if (data.op !== "join" && !g.players[uid]) throw new GameError("permission-denied", "Non fai parte di questa partita.");
     switch (data.op) {
@@ -116,7 +134,7 @@ async function gameAction(uid, data) {
       case "kick": kick(g, uid, String(data.target || "")); return {};
       case "shuffle": shuffle(g, uid, data.seekers); return {};
       case "settings": setSettings(g, uid, data.settings); return {};
-      case "start": start(g, uid, now); return { started: true };
+      case "start": start(g, uid, now, { center: zoneCenter(locs, g.players, now) }); return { started: true };
       case "rematch": rematch(g, uid); return {};
       case "catch": {
         const hider = String(data.hider || "");
@@ -139,10 +157,13 @@ async function gameAction(uid, data) {
 /* ---------- motore: avvisi, ping, squalifiche, fine partita ---------- */
 async function tickGame(code) {
   const now = Date.now();
+  const locs = await loadLocs(code);
   const { g, result, changed } = await mutate(code, (g) => {
     if (g.status !== "running") return false;
     if (g.lastWarnK == null) g.lastWarnK = -1;
-    const out = { warn: null, ping: null, ended: false };
+    const wasRunning = g.status === "running";
+    const out = { warn: null, ping: null, ended: false, zone: applyZone(g, locs, now) };
+    if (wasRunning && g.status === "ended") { out.ended = true; return out; }
     const kw = dueWarnIndex(g, now);
     if (kw > g.lastWarnK) { g.lastWarnK = kw; out.warn = { k: kw, hiders: hidersLeft(g), at: pingTime(g, kw) }; }
     const k = duePingIndex(g, now);
@@ -151,10 +172,27 @@ async function tickGame(code) {
       out.ping = { k, gid: g.gid, hiders: hidersLeft(g), seekers: seekersOf(g), warnFrom: pingTime(g, k) - warnLeadMs(g) };
     }
     if (checkEnd(g, now)) out.ended = true;
-    if (!out.warn && !out.ping && !out.ended) return false;
+    if (!out.warn && !out.ping && !out.ended && !out.zone.changed) return false;
     return out;
   });
   if (!changed) return;
+
+  const zr = result.zone;
+  if (zr.shrunk != null) {
+    const z = g.zone.zones[zr.shrunk];
+    await push(allPlayers(g), { code, tag: "zone", r: "zone", title: "La zona si è ristretta", body: `Nuovo raggio: ${z.r >= 1000 ? (z.r / 1000).toFixed(1).replace(".", ",") + " km" : z.r + " m"}. Chi resta fuori troppo a lungo viene squalificato.` });
+  }
+  if (zr.warn && zr.warn.ids.length) {
+    const secs = Math.max(10, Math.round((zr.warn.at - now) / 1000));
+    await push(zr.warn.ids, { code, tag: "zone", r: "zone", title: `La zona si restringe tra ${secs} secondi`, body: "Resterai fuori: apri Manhunt e spostati verso la nuova zona." });
+  }
+  if (zr.nowOut.length) {
+    const secs = Math.round(g.zone.outMs / 1000);
+    await push(zr.nowOut, { code, tag: "zone", r: "zone", title: "Sei fuori dalla zona", body: `Hai ${secs} secondi per rientrare. Apri Manhunt per aggiornare la tua posizione.` });
+  }
+  if (zr.dq.length) {
+    await push(zr.dq, { code, tag: "caught", title: "Squalificato", body: "Sei rimasto troppo tempo fuori dalla zona: ora sei un cercatore." });
+  }
 
   if (result.warn && result.warn.hiders.length) {
     const secs = Math.max(5, Math.round((result.warn.at - now) / 1000));

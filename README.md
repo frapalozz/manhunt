@@ -86,6 +86,17 @@ Tutti aprono il link nel browser, scrivono il nome e consentono **posizione** e 
 3. **Inizia la caccia.** I nascosti scappano e possono bloccare il telefono.
 4. Per una cattura: il cercatore tocca **Preso!** due volte, oppure il nascosto tocca **Mi hanno preso**.
 
+## Ruoli casuali e zona
+
+**Ruoli:** nella lobby l'host sceglie solo quanti cercatori ci sono. Quando preme **Inizia la caccia**, il server pesca i ruoli a caso. Su tutti i telefoni parte il conto alla rovescia 3, 2, 1 e poi compare il proprio ruolo, in arancione per i cercatori e in verde per i nascosti. Il tempo per nascondersi parte da quel momento.
+
+**Zona** (facoltativa, si sceglie nella lobby):
+- **Partenza:** il centro è la posizione media dei giocatori al momento dell'avvio, quindi avviate la partita tutti insieme nel punto di ritrovo con il GPS attivo. Il raggio iniziale va da 500 m a 3 km.
+- **Restringimento:** a intervalli fissi (2, 3, 5 o 10 minuti) la zona si stringe verso un punto casuale al suo interno, fino a 100 m. La prossima zona si vede in anticipo, tratteggiata, su mappa e radar.
+- **Fuori zona:** fuori dalla zona la mappa è colorata di rosso. Se chi si nasconde ci resta più del tempo scelto (30 s, 1, 2 o 3 minuti) viene squalificato e diventa cercatore.
+- **Notifiche:** chi si nasconde riceve una notifica quando risulta fuori zona e un minuto prima di un restringimento che lo lascerebbe fuori. Aprendo l'app la posizione si aggiorna subito.
+- **Posizione sconosciuta:** il server giudica in base all'ultima posizione nota. Se non ne ha nessuna, non applica penalità.
+
 ## Mappa e radar
 
 Durante la partita, in basso a sinistra, puoi scegliere tra due viste:

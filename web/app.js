@@ -135,7 +135,7 @@ async function act(op, extra = {}) {
     return;
   }
   await initPush();
-  if (params.get("r") === "ping") pendingRespond = true;
+  if (params.get("r") === "ping" || params.get("r") === "zone") pendingRespond = true;
   const q = (params.get("g") || "").toUpperCase().slice(0, 5);
   const saved = store.get("mh_code", null);
   $("#in-name").value = store.get("mh_name", "") || "";
@@ -158,8 +158,8 @@ async function initPush() {
   catch (e) { pushState = "unsupported"; return; }
   navigator.serviceWorker.addEventListener("message", (e) => {
     const m = e.data || {};
-    if (m.type === "open" && m.r === "ping") respondPing();
-    if (m.type === "push" && m.data && m.data.r === "ping") respondPing();
+    if (m.type === "open" && (m.r === "ping" || m.r === "zone")) respondPing();
+    if (m.type === "push" && m.data && (m.data.r === "ping" || m.data.r === "zone")) respondPing();
   });
   pushState = Notification.permission; // default | denied | granted
   if (pushState === "granted") subscribePush().catch(() => { pushState = "error"; render(); });
@@ -257,8 +257,8 @@ function onGame() {
     if (seenEvents.has(k)) continue;
     seenEvents.add(k);
     if (e.type === "end") continue;
-    if ((e.type === "found" || e.type === "dq") && e.who === uid) {
-      toast(e.type === "dq" ? "Squalificato: troppi ping saltati. Ora sei un cercatore." : "Sei stato trovato! Ora sei un cercatore.");
+    if ((e.type === "found" || e.type === "dq" || e.type === "zone") && e.who === uid) {
+      toast(e.type === "dq" ? "Squalificato: troppi ping saltati. Ora sei un cercatore." : e.type === "zone" ? "Squalificato: troppo tempo fuori dalla zona. Ora sei un cercatore." : "Sei stato trovato! Ora sei un cercatore.");
       vib([200, 100, 200]); personal = true;
     } else if (!personal) { toast(eventText(e)); vib(120); }
   }
@@ -307,6 +307,9 @@ function eventText(e) {
   if (e.type === "found") return e.by ? `${n(e.by)} ha trovato ${n(e.who)}` : `${n(e.who)} è stato trovato`;
   if (e.type === "late") return `${n(e.who)} si è unito ai cercatori`;
   if (e.type === "dq") return `${n(e.who)} è squalificato: troppi ping saltati`;
+  if (e.type === "zone") return `${n(e.who)} è squalificato: troppo tempo fuori zona`;
+  if (e.type === "shrink") return "La zona si è ristretta";
+  if (e.type === "nozone") return "Zona disattivata: nessuna posizione GPS all'avvio";
   if (e.type === "end") return e.who === "seekers" ? "Tutti trovati!" : "Tempo scaduto!";
   return "";
 }
@@ -337,6 +340,10 @@ async function writeLoc(force) {
   lastLocWriteServer = now();
   return true;
 }
+// anche da fermi (il GPS manda aggiornamenti solo quando ci si muove) la posizione resta aggiornata:
+// serve al server per il centro della zona all'avvio e per il controllo della zona
+setInterval(() => { writeLoc(false); }, 5000);
+
 // i cercatori condividono la loro posizione con la squadra
 async function writeMate() {
   if (!game || game.status !== "running" || myRole() !== "seeker" || !myPos) return;
@@ -447,10 +454,10 @@ document.addEventListener("click", async (e) => {
     }
     case "role": { const p = game.players[id]; if (p) act("setRole", { target: id, role: p.role === "seeker" ? "hider" : "seeker" }); break; }
     case "kick": act("kick", { target: id }); break;
-    case "seek-": seekCount = Math.max(1, (seekCount || 1) - 1); render(); break;
-    case "seek+": seekCount = Math.min(Math.max(1, Object.keys(game.players).length - 1), (seekCount || 1) + 1); render(); break;
+    case "seek-": act("settings", { settings: { seekers: Math.max(1, (game.settings.seekers || 1) - 1) } }); break;
+    case "seek+": act("settings", { settings: { seekers: Math.min(Math.max(1, Object.keys(game.players).length - 1), (game.settings.seekers || 1) + 1) } }); break;
     case "shuffle": act("shuffle", { seekers: seekCount }); break;
-    case "start": b.disabled = true; await act("start"); break;
+    case "start": b.disabled = true; await writeLoc(true); await act("start"); break;
     case "leave": leave(); break;
     case "found": {
       const key = "found:" + id;
@@ -463,6 +470,7 @@ document.addEventListener("click", async (e) => {
     case "center": fitted = false; scheduleMap(); break;
     case "view": view = b.dataset.v === "radar" ? "radar" : "map"; store.set("mh_view", view); applyView(); break;
     case "compass": toggleCompass(); break;
+    case "pre-skip": preSkipped = game && game.gid; render(); break;
     case "rematch": act("rematch"); break;
   }
 });
@@ -513,7 +521,7 @@ function pushNotice() {
 function show(name) {
   if (screen === name) return;
   screen = name;
-  for (const s of ["boot", "home", "lobby", "game", "end"]) $("#s-" + s).hidden = s !== name;
+  for (const s of ["boot", "home", "lobby", "pre", "game", "end"]) $("#s-" + s).hidden = s !== name;
   if (name === "game") { initMap(); applyView(); setTimeout(() => { map && map.invalidateSize(); fitted = false; scheduleMap(); }, 60); }
 }
 function render() {
@@ -525,6 +533,7 @@ function render() {
   }
   if (!game) { show("lobby"); $("#lobby").innerHTML = `<p class="waiting">Mi collego alla partita <b>${esc(code)}</b>…</p><button class="btn ghost" data-act="leave">Annulla</button>`; return; }
   if (game.status === "lobby") { show("lobby"); renderLobby(); }
+  else if (inPre()) { show("pre"); renderPre(); }
   else if (game.status === "running" && now() < game.endAt + 4000) { show("game"); renderHud(); renderOverlay(); renderSheet(); scheduleMap(); }
   else if (game.status === "running") { show("lobby"); $("#lobby").innerHTML = `<div class="boot"><div class="spin"></div><span>Tempo scaduto, calcolo il risultato…</span></div>`; }
   else { show("end"); renderEnd(); }
@@ -532,17 +541,19 @@ function render() {
 let renderQueued = false;
 function renderSoon() { if (renderQueued) return; renderQueued = true; setTimeout(() => { renderQueued = false; if (screen === "game") renderSheet(); }, 250); }
 
+const ZONE_START_OPTS = [0, 500, 1000, 1500, 2000, 3000];
+const ZONE_EVERY_OPTS = [120, 180, 300, 600];
+const ZONE_OUT_OPTS = [30, 60, 120, 180];
 function renderLobby() {
   const P = game.players, ids = Object.keys(P).sort((a, b) => P[a].joinedAt - P[b].joinedAt);
   const s = game.settings, n = ids.length, isHost = game.hostId === uid;
-  const nSeek = ids.filter((i) => P[i].role === "seeker").length, nHide = n - nSeek;
-  if (seekCount === null) seekCount = Math.max(1, Math.round(n / 4));
-  seekCount = Math.min(seekCount, Math.max(1, n - 1));
+  const nSeek = Math.min(Math.max(1, s.seekers || 1), Math.max(1, n - 1)), nHide = Math.max(0, n - nSeek);
   const sel = (key, opts, val, lab) => isHost
     ? `<select id="set-${key}" data-set="${key}">${opts.map((o) => `<option value="${o}" ${o === val ? "selected" : ""}>${lab(o)}</option>`).join("")}</select>`
     : `<div class="val">${lab(val)}</div>`;
-  const canStart = nSeek > 0 && nHide > 0;
+  const canStart = n >= 2;
   const missLab = (v) => (v ? `dopo ${v} saltat${v === 1 ? "o" : "i"}` : "mai");
+  const zoneOn = (s.zoneStart ?? 0) > 0;
   $("#lobby").innerHTML = `
     <header class="lobby-top">
       <div class="eyebrow">Codice partita</div>
@@ -551,29 +562,40 @@ function renderLobby() {
     </header>
     ${gpsNotice()}
     ${pushNotice()}
-    <div class="sec-h"><h2>Giocatori</h2><span class="muted small num">${nSeek} cercator${nSeek === 1 ? "e" : "i"} · ${nHide} nascost${nHide === 1 ? "o" : "i"}</span></div>
+    <div class="sec-h"><h2>Giocatori</h2><span class="muted small num">${n} in partita</span></div>
     <ul class="players">
       ${ids.map((id) => {
         const p = P[id], tag = [id === uid ? "tu" : "", id === game.hostId ? "host" : ""].filter(Boolean).join(" · ");
-        const chip = isHost
-          ? `<button class="chip ${p.role}" data-act="role" data-id="${esc(id)}" aria-label="Cambia squadra di ${esc(p.name)}">${p.role === "seeker" ? "Cercatore" : "Nascosto"}</button>`
-          : `<span class="chip ${p.role}">${p.role === "seeker" ? "Cercatore" : "Nascosto"}</span>`;
-        return `<li>${p.role === "hider" ? iniBadge(id, "sm") : ""}<span class="nm">${esc(p.name)}${tag ? `<small>${tag}</small>` : ""}</span>${chip}${isHost && id !== uid ? `<button class="x" data-act="kick" data-id="${esc(id)}" aria-label="Rimuovi ${esc(p.name)}">×</button>` : ""}</li>`;
+        return `<li><span class="nm">${esc(p.name)}${tag ? `<small>${tag}</small>` : ""}</span><span class="chip unknown">?</span>${isHost && id !== uid ? `<button class="x" data-act="kick" data-id="${esc(id)}" aria-label="Rimuovi ${esc(p.name)}">×</button>` : ""}</li>`;
       }).join("")}
     </ul>
-    ${isHost && n > 1 ? `<div class="card"><label>Squadre casuali</label><div class="row" style="align-items:center;justify-content:space-between;flex-wrap:wrap">
-      <div class="stepper"><button class="btn" data-act="seek-" aria-label="Meno cercatori">−</button><output class="num">${seekCount}</output><button class="btn" data-act="seek+" aria-label="Più cercatori">+</button><span class="muted small">cercator${seekCount === 1 ? "e" : "i"}</span></div>
-      <button class="btn small" data-act="shuffle">Mescola</button></div>
-      <span class="muted small">Oppure tocca la squadra di un giocatore per cambiarla.</span></div>` : ""}
+    <div class="card">
+      <label>Squadre</label>
+      <div class="row" style="align-items:center;justify-content:space-between;flex-wrap:wrap">
+        ${isHost
+          ? `<div class="stepper"><button class="btn" data-act="seek-" aria-label="Meno cercatori" ${nSeek <= 1 ? "disabled" : ""}>−</button><output class="num">${nSeek}</output><button class="btn" data-act="seek+" aria-label="Più cercatori" ${nSeek >= n - 1 ? "disabled" : ""}>+</button><span class="muted small">cercator${nSeek === 1 ? "e" : "i"}</span></div>`
+          : `<div class="val">${nSeek} cercator${nSeek === 1 ? "e" : "i"}</div>`}
+        <span class="muted small num">${nHide} nascost${nHide === 1 ? "o" : "i"}</span>
+      </div>
+      <span class="muted small">I ruoli vengono pescati a caso quando parte la partita.</span>
+    </div>
     <div class="sec-h"><h2>Regole</h2>${isHost ? "" : `<span class="muted small">decide l'host</span>`}</div>
     <div class="settings">
       <div class="fld"><label for="set-pingSec">Ping ogni</label>${sel("pingSec", PING_OPTS, s.pingSec, secLabel)}</div>
       <div class="fld"><label for="set-hideSec">Per nascondersi</label>${sel("hideSec", HIDE_OPTS, s.hideSec, secLabel)}</div>
       <div class="fld"><label for="set-durationMin">Durata</label>${sel("durationMin", DUR_OPTS, s.durationMin, (v) => v + " min")}</div>
-      <div class="fld"><label for="set-maxMissed">Squalifica</label>${sel("maxMissed", MISS_OPTS, s.maxMissed ?? 2, missLab)}</div>
+      <div class="fld"><label for="set-maxMissed">Squalifica ping</label>${sel("maxMissed", MISS_OPTS, s.maxMissed ?? 2, missLab)}</div>
     </div>
+    <div class="sec-h"><h2>Zona</h2></div>
+    <div class="settings">
+      <div class="fld full"><label for="set-zoneStart">Raggio iniziale</label>${sel("zoneStart", ZONE_START_OPTS, s.zoneStart ?? 0, (v) => (v ? fmtDist(v) : "Nessuna zona"))}</div>
+      ${zoneOn ? `
+      <div class="fld"><label for="set-zoneEvery">Si restringe ogni</label>${sel("zoneEvery", ZONE_EVERY_OPTS, s.zoneEvery ?? 300, secLabel)}</div>
+      <div class="fld"><label for="set-zoneOut">Fuori zona max</label>${sel("zoneOut", ZONE_OUT_OPTS, s.zoneOut ?? 60, secLabel)}</div>` : ""}
+    </div>
+    ${zoneOn ? `<p class="muted small" style="margin:0">La zona parte dalla posizione media dei giocatori e si restringe fino a 100 m. Avviate la partita tutti insieme nel punto di ritrovo, con il GPS attivo. Chi si nasconde e resta fuori zona troppo a lungo diventa cercatore.</p>` : ""}
     ${isHost
-      ? `<button class="btn primary block" data-act="start" ${canStart ? "" : "disabled"}>Inizia la caccia</button>${canStart ? "" : `<p class="muted small" style="margin:0;text-align:center">Serve almeno un cercatore e un nascosto.</p>`}`
+      ? `<button class="btn primary block" data-act="start" ${canStart ? "" : "disabled"}>Inizia la caccia</button>${canStart ? "" : `<p class="muted small" style="margin:0;text-align:center">Servono almeno 2 giocatori.</p>`}`
       : `<p class="waiting">In attesa che l'host avvii la partita…</p>`}
     <button class="btn ghost" data-act="leave">Esci dalla partita</button>`;
 }
@@ -594,7 +616,13 @@ function renderHud() {
     <span class="phase ${role}">${role === "seeker" ? "Cercatore" : "Nascosto"}</span>
     <div class="clock"><b>${fmt(hiding ? game.hideEnd - t : game.endAt - t)}</b><span>${hiding ? "per nascondersi" : "alla fine"}</span></div>
     <div class="counts num"><span class="s" title="Cercatori">${c.s} C</span><span class="h" title="Nascosti">${c.h} N</span></div>
-    ${bar}`;
+    ${bar}${zoneBar(t)}`;
+}
+function zoneBar(t) {
+  if (!zoneOn()) return "";
+  const z = curZone(t), nAt = nextShrinkAt(t), mz = myZone();
+  if (mz && mz.enforced && mz.out) return `<div class="zonebar out"><span>FUORI ZONA</span><span>rientra entro <b>${fmt(mz.left)}</b></span></div>`;
+  return `<div class="zonebar"><span>Zona <b>${fmtDist(z.r)}</b>${mz ? ` · bordo a <b>${fmtDist(mz.edge)}</b>` : ""}</span><span>${nAt ? `si restringe tra <b>${fmt(nAt - t)}</b>` : "zona finale"}</span></div>`;
 }
 function renderOverlay() {
   if (screen !== "game" || !game) return;
@@ -634,6 +662,14 @@ function renderSheet() {
     html += `<h3>Squadra cercatori</h3><div class="team">${seekers.map((id) => `<span class="${id === uid ? "me" : ""}">${esc(P[id].name)}${id === uid ? " (tu)" : ""}</span>`).join("")}</div>`;
   } else {
     const nx = nextPingAt(t), rem = nx - t;
+    const mz = myZone();
+    if (mz && mz.enforced && mz.out) {
+      html += `<div class="alert warn">Sei fuori dalla zona! Rientra entro ${fmt(mz.left)} o diventi cercatore.<span class="zoneline">Bordo a ${fmtDist(mz.edge)} · ${arrowTo(mz.br)}</span></div>`;
+    } else if (mz && mz.nextOut && mz.nAt && mz.nAt - t < 120000) {
+      html += `<div class="alert warn">Tra ${fmt(mz.nAt - t)} la zona si restringe e resterai fuori.<span class="zoneline">Spostati di ${fmtDist(mz.nextEdge)} · ${arrowTo(mz.nextBr)}</span></div>`;
+    } else if (zoneOn() && !myPos) {
+      html += `<div class="notice bad"><span>Senza GPS non sai se sei dentro la zona.</span></div>`;
+    }
     if (inWarnWindow()) {
       html += respondedThisPing()
         ? `<div class="alert sent">Posizione inviata per questo ping. Puoi bloccare il telefono.</div>`
@@ -646,6 +682,7 @@ function renderSheet() {
       <div class="big ${rem <= 10000 ? "soon" : ""}">${fmt(rem)}</div>
       <span class="muted small">${last ? `Ultimo ping ${ago(last.t)}: è l'ultima posizione che vedono i cercatori.` : "I cercatori non hanno ancora la tua posizione."}</span>
       <span class="muted small" style="display:flex;align-items:center;gap:8px">Sulla mappa dei cercatori sei ${iniBadge(uid, "sm")}</span>
+      ${mz && !mz.out ? `<span class="muted small zoneline">Sei nella zona · bordo a ${fmtDist(mz.edge)}</span>` : ""}
       ${max ? `<span class="muted small">Ping saltati: <b>${me.missed || 0}</b> su ${max} prima della squalifica.</span>` : ""}
       ${gps !== "ok" ? gpsNotice() : ""}
       ${pushState !== "ready" ? pushNotice() : ""}
@@ -679,7 +716,7 @@ function renderEnd() {
     <p class="muted" style="margin:0">${seekersWon ? "Nessun nascosto rimasto in gioco." : `${left.length} ${left.length === 1 ? "è rimasto nascosto" : "sono rimasti nascosti"} fino alla fine.`}
     ${best ? ` Miglior cacciatore: <b>${esc((P[best[0]] || {}).name || "?")}</b> con ${best[1]} ${best[1] === 1 ? "cattura" : "catture"}.` : ""}</p>
     <div class="sec-h"><h2>Classifica</h2><span class="muted small">tempo resistito</span></div>
-    <ul class="results">${rows.map((r, i) => `<li><span class="pos num">${i + 1}</span><span class="t"><b>${esc(r.p.name)}${r.id === uid ? " (tu)" : ""}</b><span>${!r.p.caughtAt ? "mai trovato" : r.p.dq ? "squalificato (ping saltati)" : r.p.caughtBy ? "preso da " + esc((P[r.p.caughtBy] || {}).name || "?") : "preso"}</span></span><span class="tm">${fmt(Math.max(0, r.surv))}</span></li>`).join("")}</ul>
+    <ul class="results">${rows.map((r, i) => `<li><span class="pos num">${i + 1}</span><span class="t"><b>${esc(r.p.name)}${r.id === uid ? " (tu)" : ""}</b><span>${!r.p.caughtAt ? "mai trovato" : r.p.dq ? (r.p.dqReason === "zone" ? "squalificato (fuori zona)" : "squalificato (ping saltati)") : r.p.caughtBy ? "preso da " + esc((P[r.p.caughtBy] || {}).name || "?") : "preso"}</span></span><span class="tm">${fmt(Math.max(0, r.surv))}</span></li>`).join("")}</ul>
     ${game.hostId === uid ? `<button class="btn primary block" data-act="rematch">Rivincita</button>` : `<p class="waiting">L'host può avviare una rivincita.</p>`}
     <button class="btn ghost" data-act="leave">Torna alla home</button>`;
 }
@@ -703,10 +740,28 @@ function initMap() {
 }
 function scheduleMap() { if (mapQueued) return; mapQueued = true; requestAnimationFrame(() => { mapQueued = false; drawMap(); }); }
 const icon = (html) => L.divIcon({ className: "mk-wrap", html, iconSize: [0, 0] });
+function circleRing(z, n = 72) {
+  const out = [], cosLat = Math.cos((z.lat * Math.PI) / 180);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    out.push([z.lat + (z.r * Math.cos(a)) / 111320, z.lng + (z.r * Math.sin(a)) / (111320 * cosLat)]);
+  }
+  return out;
+}
+function drawZone(t) {
+  const z = curZone(t); if (!z) return null;
+  const box = [[z.lat - 1, z.lng - 1.5], [z.lat - 1, z.lng + 1.5], [z.lat + 1, z.lng + 1.5], [z.lat + 1, z.lng - 1.5]];
+  L.polygon([box, circleRing(z)], { stroke: false, fillColor: COL.danger, fillOpacity: 0.16, interactive: false }).addTo(layer);
+  L.circle([z.lat, z.lng], { radius: z.r, color: "#ffffff", weight: 2.5, opacity: 0.9, fill: false, interactive: false }).addTo(layer);
+  const nz = nextZone(t);
+  if (nz) L.circle([nz.lat, nz.lng], { radius: nz.r, color: "#ffffff", weight: 1.5, opacity: 0.8, dashArray: "8 8", fill: false, interactive: false }).addTo(layer);
+  return L.latLng(z.lat, z.lng).toBounds(z.r * 2);
+}
 function drawMap() {
   if (!map || screen !== "game" || !game) return;
   layer.clearLayers();
   const pts = [], P = game.players, role = myRole(), t = now();
+  const zoneBounds = drawZone(t);
   const ids = role === "seeker" ? Object.keys(P).filter((i) => P[i].role === "hider") : [uid];
   for (const id of ids) {
     const all = byHider[id] || [], arr = all.filter((p) => !p.nofix);
@@ -736,13 +791,82 @@ function drawMap() {
     pts.push([myPos.lat, myPos.lng]);
   }
   // nuovi ping (o un nuovo nascosto in lista): riadatto la vista per mostrarli tutti
-  const sig = ids.map((id) => { const a = byHider[id] || []; return id + ":" + (a.length ? a[a.length - 1].k : "-"); }).join("|");
+  const mzOut = role === "hider" && myZone() && myZone().out ? "fuori" : "dentro";
+  const sig = zoneIdx(t) + mzOut + "#" + ids.map((id) => { const a = byHider[id] || []; return id + ":" + (a.length ? a[a.length - 1].k : "-"); }).join("|");
   if (sig !== fitSig) { fitSig = sig; fitted = false; }
-  if (!fitted && pts.length) {
+  if (!fitted && (pts.length || zoneBounds)) {
     fitted = true;
-    if (pts.length === 1) map.setView(pts[0], 17); else map.fitBounds(pts, { padding: [50, 50], maxZoom: 18 });
+    if (zoneBounds) { pts.forEach((p) => zoneBounds.extend(p)); map.fitBounds(zoneBounds, { padding: [30, 30], maxZoom: 18 }); }
+    else if (pts.length === 1) map.setView(pts[0], 17); else map.fitBounds(pts, { padding: [50, 50], maxZoom: 18 });
   }
 }
+
+
+/* ============ pre-partita: 3, 2, 1 e ruolo ============ */
+const COUNTDOWN_MS = 3000, REVEAL_MS = 4500;
+let preSkipped = null;
+const inPre = () => !!(game && game.status === "running" && game.revealAt && game.players[uid] && preSkipped !== game.gid && now() < game.revealAt + REVEAL_MS);
+function renderPre() {
+  const el = $("#pre"), t = now();
+  if (t < game.revealAt) {
+    const n = Math.max(1, Math.ceil((game.revealAt - t) / 1000));
+    if (el.dataset.n === String(n)) return;
+    el.dataset.n = String(n); el.className = "pre";
+    el.innerHTML = `<div class="eyebrow">I ruoli stanno per essere svelati</div><div class="count">${n}</div><p>Tieni il telefono in mano e non far vedere lo schermo.</p>`;
+    vib(60); return;
+  }
+  const role = myRole(), key = "role-" + role;
+  if (el.dataset.n === key) return;
+  el.dataset.n = key; el.className = "pre reveal " + role;
+  const P = game.players, mins = secLabel(game.settings.hideSec);
+  const mates = Object.keys(P).filter((i) => i !== uid && P[i].role === role).map((i) => `<span>${esc(P[i].name)}</span>`).join("");
+  el.innerHTML = role === "seeker"
+    ? `<div class="eyebrow">Il tuo ruolo</div><div class="role">Cercatore</div>
+       <p>Chiudi gli occhi e conta: i nascosti hanno ${mins} per sparire. Poi segui i ping.</p>
+       ${mates ? `<div class="eyebrow">Cerchi insieme a</div><div class="team">${mates}</div>` : `<p><b>Cerchi da solo.</b></p>`}
+       <button class="btn go" data-act="pre-skip">Vai alla partita</button>`
+    : `<div class="eyebrow">Il tuo ruolo</div><div class="role">Nascosto</div>
+       <p>Scappa! Hai ${mins} per nasconderti${zoneOn() ? " dentro la zona" : ""}.</p>
+       <p class="zoneline" style="justify-content:center">Sulla mappa dei cercatori sei ${iniBadge(uid)}</p>
+       ${mates ? `<div class="eyebrow">Nascosti con te</div><div class="team">${mates}</div>` : ""}
+       <button class="btn go" data-act="pre-skip">Vai alla partita</button>`;
+  vib([200, 100, 400]);
+}
+setInterval(() => { if (game && (screen === "pre" || inPre())) render(); }, 100);
+
+/* ============ zona ============ */
+const zoneOn = () => !!(game && game.zone && game.zone.zones && game.zone.zones.length);
+function zoneIdx(t) {
+  if (!zoneOn()) return -1;
+  if (t < game.hideEnd) return 0;
+  return Math.min(game.zone.zones.length - 1, Math.floor((t - game.hideEnd) / game.zone.everyMs));
+}
+const curZone = (t) => (zoneOn() ? game.zone.zones[zoneIdx(t)] : null);
+const nextZone = (t) => (zoneOn() ? game.zone.zones[zoneIdx(t) + 1] || null : null);
+const nextShrinkAt = (t) => (nextZone(t) ? game.hideEnd + (zoneIdx(t) + 1) * game.zone.everyMs : null);
+const isOutside = (pos, z) => dist(pos, z) - Math.min(pos.acc || 0, 50) > z.r;
+let localOutSince = null;
+/** Stato della zona per me: fuori? da quando? quanto manca alla squalifica? */
+function myZone() {
+  const t = now();
+  if (!zoneOn() || !game || game.status !== "running" || myRole() !== "hider" || !myPos) return null;
+  const z = curZone(t), out = isOutside(myPos, z);
+  const d = dist(myPos, z), edge = Math.abs(d - z.r), br = bearing(myPos, z);
+  const enforced = t >= game.hideEnd;
+  const since = Math.min(...[game.players[uid].outSince, localOutSince].filter(Boolean), Infinity);
+  const left = since === Infinity ? game.zone.outMs : game.zone.outMs - (t - since);
+  const nz = nextZone(t), nAt = nextShrinkAt(t);
+  const nextOut = !!(nz && isOutside(myPos, nz));
+  return { z, out, enforced, edge, br, left, nz, nAt, nextOut, nextEdge: nz ? Math.max(0, dist(myPos, nz) - nz.r) : 0, nextBr: nz ? bearing(myPos, nz) : 0 };
+}
+// controllo locale continuo: avviso immediato quando esci dalla zona
+setInterval(() => {
+  const mz = myZone();
+  if (!mz || !mz.enforced) { localOutSince = null; return; }
+  if (mz.out && !localOutSince) { localOutSince = now(); toast(`Sei fuori dalla zona! Rientra entro ${secLabel(Math.round(game.zone.outMs / 1000))}.`); vib([300, 100, 300, 100, 300]); }
+  if (!mz.out && localOutSince) { localOutSince = null; toast("Sei di nuovo nella zona."); vib(80); }
+}, 1000);
+const arrowTo = (br) => `<span class="arrow" style="transform:rotate(${br.toFixed(0)}deg)">↑</span> ${CARD[Math.round(br / 45) % 8]}`;
 
 /* ============ vista: mappa normale o radar ============ */
 let view = store.get("mh_view", "map") === "radar" ? "radar" : "map";
@@ -838,7 +962,9 @@ function drawRadar(ts) {
   if (!myPos) { ctx.fillStyle = muted; ctx.font = font(400, 14); ctx.fillText("Aspetto il GPS per mostrare il radar…", cx, cy); return; }
 
   const blips = radarBlips().map((b) => ({ ...b, d: dist(myPos, b), br: bearing(myPos, b) }));
-  const maxD = blips.reduce((m, b) => Math.max(m, b.d), 0);
+  let maxD = blips.reduce((m, b) => Math.max(m, b.d), 0);
+  const zc = curZone(now()), zn = nextZone(now());
+  if (zc) maxD = Math.max(maxD, dist(myPos, zc) - zc.r + 40, 60); // il bordo più vicino della zona resta visibile
   const scale = RADAR_STEPS.find((v) => v >= maxD * 1.12) || RADAR_STEPS[RADAR_STEPS.length - 1];
   const live = compassOn && heading != null;
   const rot = live ? heading : 0;
@@ -856,6 +982,18 @@ function drawRadar(ts) {
   ctx.fillStyle = muted; ctx.font = font(400, 11); ctx.textAlign = "left";
   for (let i = 1; i <= 4; i++) { const [x, y] = at(rot + 135, (R * i) / 4); ctx.fillText(fmtDist((scale * i) / 4), x + 4, y); }
   ctx.textAlign = "center";
+
+  // zona: fuori ombreggiato in rosso, prossima zona tratteggiata
+  if (zc) {
+    const zp = (z) => { const d = dist(myPos, z), [x, y] = at(bearing(myPos, z), (d / scale) * R); return [x, y, (z.r / scale) * R]; };
+    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
+    const [zx, zy, zr] = zp(zc);
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.arc(zx, zy, zr, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,92,92,0.16)"; ctx.fill("evenodd");
+    ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(zx, zy, zr, 0, Math.PI * 2); ctx.stroke();
+    if (zn) { const [nx, ny, nr] = zp(zn); ctx.setLineDash([6, 6]); ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.beginPath(); ctx.arc(nx, ny, nr, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+    ctx.restore();
+  }
 
   // fascio che ruota
   if (!reduceMotion && ctx.createConicGradient) {

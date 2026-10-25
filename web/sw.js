@@ -17,8 +17,8 @@ self.addEventListener("push", (event) => {
       badge: "icon-192.png",
       tag: d.tag || "manhunt",
       renotify: true,
-      requireInteraction: d.r === "ping",
-      vibrate: d.r === "ping" ? [200, 100, 200, 100, 200] : [120],
+      requireInteraction: d.r === "ping" || d.r === "zone",
+      vibrate: d.r === "ping" || d.r === "zone" ? [200, 100, 200, 100, 200] : [120],
       data: { url: d.url || "./", r: d.r || "" },
     });
   })());

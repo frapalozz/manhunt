@@ -188,6 +188,29 @@ button.chip{cursor:pointer}
 .conn{position:fixed;z-index:2000;top:calc(var(--sat) + 8px);left:50%;transform:translateX(-50%);background:var(--danger);color:#1a0505;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px}
 .toast{position:fixed;z-index:2000;left:50%;transform:translateX(-50%);bottom:calc(var(--sab) + 18px);width:min(92vw,440px);background:var(--fg);color:var(--bg);font-weight:700;padding:14px 16px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
 .leaflet-container{font-family:var(--f-body)}
+
+/* pre-partita: 3, 2, 1 e ruolo */
+.chip.unknown{background:var(--surface-2);color:var(--muted)}
+.pre{position:fixed;inset:0;z-index:1500;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;background:var(--bg);color:var(--fg);padding:calc(24px + var(--sat)) max(24px,var(--sar)) calc(24px + var(--sab)) max(24px,var(--sal));overflow:hidden}
+.pre .count{font-family:var(--f-display);font-weight:900;font-size:clamp(150px,55vw,300px);line-height:.8;animation:countIn .9s ease-out both;font-variant-numeric:tabular-nums}
+@keyframes countIn{from{transform:scale(1.7);opacity:0}35%{opacity:1}to{transform:scale(1);opacity:1}}
+.pre.reveal.seeker{background:var(--blaze);color:var(--blaze-ink)}
+.pre.reveal.hider{background:var(--hide);color:var(--hide-ink)}
+.pre .role{font-family:var(--f-display);font-weight:900;font-size:clamp(34px,12vw,120px);line-height:.9;text-transform:uppercase;white-space:nowrap;max-width:100%;animation:roleIn .6s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes roleIn{from{transform:scale(.4) rotate(-6deg);opacity:0}to{transform:none;opacity:1}}
+.pre .eyebrow{color:inherit;opacity:.75}
+.pre p{max-width:32ch;margin:0;font-size:17px;line-height:1.4}
+.pre .team{justify-content:center}
+.pre.reveal .team span{background:rgba(0,0,0,.14);color:inherit}
+.pre .ini{box-shadow:0 0 0 2px currentColor}
+.pre .btn.go{background:rgba(0,0,0,.82);color:#fff;border-color:transparent;margin-top:6px}
+/* zona */
+.zonebar{grid-column:1/-1;display:flex;justify-content:space-between;gap:10px;font-size:13px;color:var(--muted)}
+.zonebar b{color:var(--fg);font-variant-numeric:tabular-nums}
+.zonebar.out{background:var(--danger);color:#1a0505;font-weight:700;border-radius:8px;padding:6px 10px;animation:blink 1s steps(2) infinite}
+.zonebar.out b{color:#1a0505}
+@keyframes blink{50%{opacity:.75}}
+.zoneline{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 /* vista mappa / radar */
 #radar{position:absolute;inset:0;width:100%;height:100%;display:block;background:var(--surface);touch-action:none}
 .viewsw{position:absolute;left:max(12px,var(--sal));bottom:12px;z-index:500;display:flex;background:var(--bg);border:1.5px solid var(--line);border-radius:999px;padding:3px;gap:2px}
@@ -268,6 +291,8 @@ button.chip{cursor:pointer}
   </div>
   <div class="sheet" id="sheet"></div>
 </section>
+
+<section id="s-pre" hidden><div id="pre" class="pre" aria-live="assertive"></div></section>
 
 <section id="s-end" class="screen" hidden><div class="col" id="end"></div></section>
 
