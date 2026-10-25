@@ -86,6 +86,8 @@ Tutti aprono il link nel browser, scrivono il nome e consentono **posizione** e 
 3. **Inizia la caccia.** I nascosti scappano e possono bloccare il telefono.
 4. Per una cattura: il cercatore tocca **Preso!** due volte, oppure il nascosto tocca **Mi hanno preso**.
 
+Nella pagina **Come si gioca** (`tutorial.html`) c'è un tutorial in 10 schede, raggiungibile dalla home e dalla lobby. Puoi anche mandare direttamente il link `https://TUO-SITO/tutorial.html` a chi gioca per la prima volta.
+
 ## Ruoli casuali e zona
 
 **Ruoli:** nella lobby l'host sceglie solo quanti cercatori ci sono. Quando preme **Inizia la caccia**, il server pesca i ruoli a caso. Su tutti i telefoni parte il conto alla rovescia 3, 2, 1 e poi compare il proprio ruolo, in arancione per i cercatori e in verde per i nascosti. Il tempo per nascondersi parte da quel momento.

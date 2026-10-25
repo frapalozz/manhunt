@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12160f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Come si gioca · Manhunt</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: una scheda per passo, si sfoglia con il dito o con i pulsanti in basso. */
+:root{
+  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px);
+  --bg:#12160f;--surface:#1b2117;--surface-2:#242c1f;--line:#343e2d;--fg:#eef1e4;--muted:#9ba68e;
+  --blaze:#ff6b1a;--blaze-ink:#1a0d03;--hide:#9ad8c6;--hide-ink:#06201a;--danger:#ff5c5c;
+  --pink:#ff7eb6;--yellow:#ffd23f;--blue:#3d8bff;
+  --f-display:"Big Shoulders Display","Arial Narrow","Roboto Condensed",Impact,sans-serif;
+  --f-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 var(--f-body);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+[hidden]{display:none!important}
+.app{height:100%;display:flex;flex-direction:column;padding-top:var(--sat);padding-bottom:var(--sab)}
+
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-left:max(16px,var(--sal));padding-right:max(16px,var(--sar));padding-block:14px 6px}
+header h1{margin:0;font-family:var(--f-display);font-weight:900;font-size:clamp(22px,7vw,30px);text-transform:uppercase;letter-spacing:.02em}
+header h1 span{color:var(--blaze)}
+.close{color:var(--muted);text-decoration:none;font-weight:700;font-size:14px;padding:8px 12px;border:1.5px solid var(--line);border-radius:999px}
+
+.track{flex:1;min-height:0;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}
+.track::-webkit-scrollbar{display:none}
+.slide{flex:0 0 100%;scroll-snap-align:center;overflow-y:auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:14px;padding-left:max(20px,var(--sal));padding-right:max(20px,var(--sar));padding-block:8px 16px}
+.slide > *{width:100%;max-width:440px}
+/* centrata se c'è spazio, dall'alto se il contenuto deve scorrere (niente parti irraggiungibili) */
+.slide > :first-child{margin-top:auto}
+.slide > :last-child{margin-bottom:auto}
+.art{display:block;flex-shrink:0;width:min(100%,44vh);max-width:440px;height:auto;aspect-ratio:16/10;align-self:center;border-radius:18px;background:var(--surface);border:1px solid var(--line)}
+.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);font-weight:700;margin:0}
+.slide h2{margin:0;font-family:var(--f-display);font-weight:900;font-size:clamp(30px,10vw,44px);line-height:.95;text-transform:uppercase;text-wrap:balance;overflow-wrap:anywhere}
+.slide p{margin:0;color:var(--muted)}
+.slide p b{color:var(--fg)}
+.tips{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.tips li{display:grid;grid-template-columns:22px 1fr;gap:8px;color:var(--muted);font-size:15px}
+.tips li::before{content:"";width:10px;height:10px;margin-top:7px;border-radius:50%;background:var(--blaze)}
+.tips b{color:var(--fg)}
+.o-txt{color:var(--blaze)} .t-txt{color:var(--hide)}
+
+footer{display:grid;grid-template-columns:1fr auto 1fr;justify-items:center;align-items:center;gap:10px;padding-left:max(16px,var(--sal));padding-right:max(16px,var(--sar));padding-block:10px 14px;border-top:1px solid var(--line)}
+.btn{appearance:none;border:1.5px solid var(--line);background:var(--surface-2);color:var(--fg);border-radius:12px;padding:12px 16px;font:700 15px var(--f-body);min-height:48px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.btn:active{transform:scale(.98)}
+.btn:focus-visible,.close:focus-visible,.dots button:focus-visible{outline:3px solid var(--blaze);outline-offset:2px}
+.btn.primary{background:var(--blaze);border-color:var(--blaze);color:var(--blaze-ink);font-family:var(--f-display);font-size:19px;letter-spacing:.04em;text-transform:uppercase}
+.btn[disabled]{opacity:.35;cursor:default}
+#prev{justify-self:start} #next{justify-self:end}
+.dots{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.dots button{appearance:none;border:0;width:8px;height:8px;border-radius:999px;background:var(--line);padding:0;cursor:pointer;transition:width .2s,background .2s}
+.dots button[aria-current="step"]{width:22px;background:var(--fg)}
+.count{display:none;color:var(--muted);font-weight:700;font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
+@media (max-width:380px){.dots{display:none}.count{display:block}.btn{padding:10px 14px}}
+
+/* disegni */
+.art .bgc{fill:var(--surface)}
+.art .ln{stroke:var(--line);fill:none;stroke-width:1.5}
+.art .lnw{stroke:var(--fg);fill:none;stroke-width:2.5}
+.art .dash{stroke:var(--fg);fill:none;stroke-width:1.5;stroke-dasharray:6 6;opacity:.75}
+.art .o{fill:var(--blaze)} .art .t{fill:var(--hide)} .art .p{fill:var(--pink)} .art .y{fill:var(--yellow)} .art .b{fill:var(--blue)}
+.art .ink{fill:#0b1410} .art .fgf{fill:var(--fg)} .art .mut{fill:var(--muted)} .art .sf2{fill:var(--surface-2)} .art .red{fill:var(--danger)}
+.art .lbl{font:800 13px var(--f-body);fill:#0b1410;text-anchor:middle;dominant-baseline:central}
+.art .txt{font:700 12px var(--f-body);fill:var(--fg);text-anchor:middle;dominant-baseline:central}
+.art .big{font:900 64px var(--f-display);text-anchor:middle;dominant-baseline:central}
+.art .path{stroke:var(--hide);stroke-width:2.5;fill:none;stroke-dasharray:5 7}
+.ripple{transform-box:fill-box;transform-origin:center;animation:ripple 1.8s ease-out infinite}
+@keyframes ripple{from{transform:scale(1);opacity:.9}to{transform:scale(3);opacity:0}}
+.sweep{transform-origin:160px 100px;animation:spin 4s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.shrink{transform-box:fill-box;transform-origin:center;animation:shrink 4s ease-in-out infinite alternate}
+@keyframes shrink{from{transform:scale(1)}to{transform:scale(.62)}}
+.tap{transform-box:fill-box;transform-origin:center;animation:tap 1.6s ease-in-out infinite}
+@keyframes tap{0%,60%,100%{transform:scale(1);opacity:.5}30%{transform:scale(.7);opacity:.9}}
+.flip{animation:flip 3s ease-in-out infinite}
+@keyframes flip{0%,45%{fill:var(--hide)}55%,100%{fill:var(--blaze)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Come si <span>gioca</span></h1>
+    <a class="close" href="./">Chiudi</a>
+  </header>
+
+  <main class="track" id="track" aria-roledescription="carosello" aria-label="Tutorial di Manhunt">
+
+    <section class="slide" aria-label="Il gioco">
+      <svg class="art" viewBox="0 0 320 200" role="img" aria-label="Un cercatore arancione segue la traccia di un nascosto verde">
+        <rect class="bgc" width="320" height="200"/>
+        <g class="ln"><path d="M0 60h320M0 140h320M90 0v200M230 0v200"/></g>
+        <path class="path" d="M70 150 C120 150 130 80 180 80 S 250 60 250 50"/>
+        <circle class="t ripple" cx="250" cy="50" r="16" opacity=".6"/>
+        <circle class="t" cx="250" cy="50" r="16"/><text class="lbl" x="250" y="50">N</text>
+        <circle class="o" cx="70" cy="150" r="16"/><text class="lbl" x="70" y="150">C</text>
+      </svg>
+      <p class="eyebrow">Passo 1</p>
+      <h2>Nascondino con il GPS</h2>
+      <p>Una squadra si nasconde, l'altra dà la caccia. Ogni tanto i <b class="o-txt">cercatori</b> scoprono dove si trovano i <b class="t-txt">nascosti</b>. Chi viene preso cambia squadra. Si gioca all'aperto, ognuno con il suo telefono.</p>
+    </section>
+
+    <section class="slide" aria-label="Prima di iniziare">
+      <svg class="art" viewBox="0 0 320 200" role="img" aria-label="Telefono con posizione e notifiche consentite">
+        <rect class="bgc" width="320" height="200"/>
+        <rect x="110" y="18" width="100" height="168" rx="16" class="sf2"/>
+        <rect x="118" y="34" width="84" height="136" rx="8" class="ink"/>
+        <g transform="translate(126 50)">
+          <rect width="68" height="30" rx="7" class="sf2"/><circle cx="14" cy="15" r="7" class="b"/><rect x="27" y="11" width="32" height="8" rx="4" class="mut"/>
+          <rect y="40" width="68" height="30" rx="7" class="sf2"/><circle cx="14" cy="55" r="7" class="o"/><rect x="27" y="51" width="32" height="8" rx="4" class="mut"/>
+          <rect y="80" width="68" height="30" rx="7" class="sf2"/><circle cx="14" cy="95" r="7" class="t"/><rect x="27" y="91" width="32" height="8" rx="4" class="mut"/>
+        </g>
+        <g class="txt"><text x="60" y="65">Posizione</text><text x="60" y="105">Notifiche</text><text x="262" y="145">Icona sulla</text><text x="262" y="161">Home</text></g>
+        <path d="M95 65h18M95 105h18M228 150h-12" class="lnw"/>
+      </svg>
+      <p class="eyebrow">Passo 2</p>
+      <h2>Prima di iniziare</h2>
+      <ul class="tips">
+        <li><span>Apri il link della partita e scrivi il tuo <b>nome</b>.</span></li>
+        <li><span>Consenti <b>posizione</b> e <b>notifiche</b>: senza, il gioco non funziona.</span></li>
+        <li><span>Su <b>iPhone</b>: in Safari tocca Condividi → <b>Aggiungi alla schermata Home</b> e gioca sempre da quell'icona. Solo così arrivano le notifiche.</span></li>
+      </ul>
+    </section>
+
+    <section class="slide" aria-label="La lobby">
+      <svg class="art" viewBox="0 0 320 200" role="img" aria-label="Codice partita condiviso con il gruppo">
+        <rect class="bgc" width="320" height="200"/>
+        <text class="big o-txt" x="160" y="78" style="fill:var(--blaze);letter-spacing:6px">K7P2Q</text>
+        <g>
+          <circle cx="80" cy="150" r="16" class="sf2"/><text class="txt" x="80" y="150">?</text>
+          <circle cx="133" cy="150" r="16" class="sf2"/><text class="txt" x="133" y="150">?</text>
+          <circle cx="186" cy="150" r="16" class="sf2"/><text class="txt" x="186" y="150">?</text>
+          <circle cx="239" cy="150" r="16" class="sf2"/><text class="txt" x="239" y="150">?</text>
+        </g>
+      </svg>
+      <p class="eyebrow">Passo 3</p>
+      <h2>La lobby</h2>
+      <p>Uno di voi tocca <b>Crea partita</b> e condivide il codice di 5 lettere. Chi crea la partita è l'host e sceglie le regole: quanti cercatori, ogni quanto c'è il ping, quanto dura e quanto è grande la zona. Poi tutti insieme, nel punto di ritrovo, si preme <b>Inizia la caccia</b>.</p>
+    </section>
+
+    <section class="slide" aria-label="Ruoli a sorpresa">
+      <svg class="art" viewBox="0 0 320 200" role="img" aria-label="Conto alla rovescia e due ruoli: cercatore arancione e nascosto verde">
+        <rect class="bgc" width="320" height="200"/>
+        <text class="big" x="60" y="100" style="fill:var(--fg)">3</text>
+        <path d="M95 100h18" class="lnw"/>
+        <rect x="125" y="40" width="80" height="120" rx="12" class="o"/>
+        <text class="lbl" x="165" y="100" style="font-size:12px">CERCATORE</text>
+        <rect x="220" y="40" width="80" height="120" rx="12" class="t"/>
+        <text class="lbl" x="260" y="100" style="font-size:12px">NASCOSTO</text>
+      </svg>
+      <p class="eyebrow">Passo 4</p>
+      <h2>Ruoli a sorpresa</h2>
+      <p>I ruoli li pesca il gioco a caso. Parte il conto alla rovescia <b>3, 2, 1</b> e il telefono si colora: <b class="o-txt">arancione</b> se sei cercatore, <b class="t-txt">verde</b> se sei nascosto. Tieni lo schermo per te!</p>
+    </section>
+
+    <section class="slide" aria-label="Nasconditi">
+      <svg class="art" viewBox="0 0 320 200" role="img" aria-label="Il nascosto corre a nascondersi dietro un albero">
+        <rect class="bgc" width="320" height="200"/>
+        <circle cx="70" cy="140" r="16" class="o"/><text class="lbl" x="70" y="140">C</text>
+        <text class="txt" x="70" y="172">occhi chiusi</text>
+        <path class="path" d="M100 130 C150 120 180 70 230 70"/>
+        <circle cx="262" cy="62" r="34" class="ink" opacity=".5"/>
+        <path d="M262 60 l-30 40h60z" style="fill:#2f5a3a"/><path d="M262 30 l-24 36h48z" style="fill:#3d7a4b"/><rect x="258" y="98" width="8" height="18" class="mut"/>
+        <circle cx="236" cy="88" r="13" class="t"/><text class="lbl" x="236" y="88" style="font-size:11px">N</text>
+      </svg>
+      <p class="eyebrow">Passo 5</p>
+      <h2>Nasconditi</h2>
+      <p>I nascosti hanno qualche minuto di vantaggio per sparire, mentre i cercatori chiudono gli occhi. Una volta nascosto puoi <b>bloccare il telefono</b> e metterlo in tasca.</p>
+    </section>
+
+    <section class="slide" aria-label="Il ping">
+      <svg class="art" viewBox="0 0 320 200" role="img" aria-label="Notifica del ping toccata con il dito">
+        <rect class="bgc" width="320" height="200"/>
+        <rect x="90" y="16" width="140" height="176" rx="18" class="sf2"/>
+        <rect x="100" y="32" width="120" height="148" rx="10" class="ink"/>
+        <rect x="106" y="48" width="108" height="48" rx="10" style="fill:var(--fg)"/>
+        <text x="160" y="64" style="font:800 11px var(--f-body);fill:#0b1410;text-anchor:middle;dominant-baseline:central">Ping tra 45 secondi</text>
+        <text x="160" y="81" style="font:400 10px var(--f-body);fill:#0b1410;text-anchor:middle;dominant-baseline:central">Tocca per inviare</text>
+        <circle class="o tap" cx="190" cy="78" r="13" opacity=".6"/>
+        <circle cx="160" cy="140" r="14" class="t ripple" opacity=".6"/><circle cx="160" cy="140" r="14" class="t"/><text class="lbl" x="160" y="140" style="font-size:11px">BR</text>
+      </svg>
+      <p class="eyebrow">Passo 6</p>
+      <h2>Il ping</h2>
+      <p>A intervalli fissi i cercatori vedono dove sei. Poco prima ti arriva una notifica <b>"Ping tra 45 secondi"</b>: toccala e la tua posizione parte da sola, poi richiudi. Se non rispondi il ping risulta <b>saltato</b>: troppi ping saltati e sei squalificato.</p>
+    </section>
+
+    <section class="slide" aria-label="Mappa e radar">
+      <svg class="art" viewBox="0 0 320 200" role="img" aria-label="Radar con i nascosti colorati e le loro iniziali">
+        <rect class="bgc" width="320" height="200"/>
+        <g class="ln"><circle cx="160" cy="100" r="30"/><circle cx="160" cy="100" r="60"/><circle cx="160" cy="100" r="88"/><path d="M160 12v176M72 100h176"/></g>
+        <path class="sweep" d="M160 100 L160 12 A88 88 0 0 1 222 38 Z" style="fill:var(--blaze);opacity:.15"/>
+        <text x="160" y="6" style="font:700 11px var(--f-body);fill:var(--blaze);text-anchor:middle;dominant-baseline:hanging">N</text>
+        <circle cx="160" cy="100" r="7" class="b" style="stroke:#fff;stroke-width:3"/>
+        <circle cx="210" cy="55" r="15" class="t"/><text class="lbl" x="210" y="55" style="font-size:11px">BR</text>
+        <circle cx="115" cy="140" r="15" class="y"/><text class="lbl" x="115" y="140" style="font-size:11px">BE</text>
+        <circle cx="105" cy="68" r="15" class="p"/><text class="lbl" x="105" y="68" style="font-size:11px">G</text>
+      </svg>
+      <p class="eyebrow">Passo 7</p>
+      <h2>Mappa e radar</h2>
+      <p>Ogni nascosto ha le sue <b>iniziali</b> in un <b>colore</b> suo. In basso a sinistra scegli <b>Mappa</b> o <b>Radar</b>: sul radar sei al centro e vedi direzione e distanza di ognuno. Con <b>Bussola</b> il radar gira insieme al telefono, così quello che è in alto è davanti a te.</p>
+    </section>
+
+    <section class="slide" aria-label="La zona">
+      <svg class="art" viewBox="0 0 320 200" role="img" aria-label="La zona si restringe; chi è fuori è nella parte rossa">
+        <rect width="320" height="200" class="red" opacity=".16"/>
+        <circle cx="150" cy="100" r="82" class="bgc"/>
+        <circle cx="150" cy="100" r="82" class="lnw"/>
+        <circle cx="170" cy="92" r="46" class="dash shrink"/>
+        <circle cx="170" cy="95" r="13" class="t"/><text class="lbl" x="170" y="95" style="font-size:11px">N</text>
+        <circle cx="278" cy="40" r="13" class="p"/><text class="lbl" x="278" y="40" style="font-size:11px">G</text>
+        <text x="278" y="66" style="font:700 11px var(--f-body);fill:var(--danger);text-anchor:middle">fuori!</text>
+      </svg>
+      <p class="eyebrow">Passo 8</p>
+      <h2>La zona</h2>
+      <p>Se l'host la attiva, la zona parte grande e <b>si restringe</b> a intervalli fissi. La prossima zona si vede in anticipo, tratteggiata. Fuori dalla zona la mappa è rossa: se ti nascondi e resti fuori oltre il tempo concesso, <b>diventi cercatore</b>.</p>
+    </section>
+
+    <section class="slide" aria-label="Preso">
+      <svg class="art" viewBox="0 0 320 200" role="img" aria-label="Il cercatore raggiunge il nascosto, che diventa cercatore">
+        <rect class="bgc" width="320" height="200"/>
+        <circle cx="120" cy="90" r="22" class="o"/><text class="lbl" x="120" y="90">C</text>
+        <circle cx="200" cy="90" r="22" class="flip"/><text class="lbl" x="200" y="90">N</text>
+        <rect x="100" y="140" width="120" height="40" rx="10" class="sf2" style="stroke:var(--line)"/>
+        <text class="txt" x="160" y="160" style="font-size:15px">Preso!</text>
+        <circle class="o tap" cx="190" cy="160" r="12" opacity=".6"/>
+      </svg>
+      <p class="eyebrow">Passo 9</p>
+      <h2>Preso!</h2>
+      <p>Quando un cercatore ti trova, tocca <b>Preso!</b> due volte, oppure sei tu a toccare <b>Mi hanno preso</b>. Da quel momento diventi cercatore e aiuti a trovare gli altri.</p>
+    </section>
+
+    <section class="slide" aria-label="Chi vince">
+      <svg class="art" viewBox="0 0 320 200" role="img" aria-label="Due modi di vincere">
+        <rect class="bgc" width="320" height="200"/>
+        <rect x="24" y="30" width="126" height="140" rx="14" class="o"/>
+        <text class="lbl" x="87" y="70" style="font-size:12px">CERCATORI</text>
+        <text class="lbl" x="87" y="110" style="font:400 11px var(--f-body)">trovano tutti</text>
+        <text class="lbl" x="87" y="126" style="font:400 11px var(--f-body)">in tempo</text>
+        <rect x="170" y="30" width="126" height="140" rx="14" class="t"/>
+        <text class="lbl" x="233" y="70" style="font-size:12px">NASCOSTI</text>
+        <text class="lbl" x="233" y="110" style="font:400 11px var(--f-body)">almeno uno resiste</text>
+        <text class="lbl" x="233" y="126" style="font:400 11px var(--f-body)">fino alla fine</text>
+      </svg>
+      <p class="eyebrow">Passo 10</p>
+      <h2>Chi vince</h2>
+      <p>Vincono i <b class="o-txt">cercatori</b> se trovano tutti prima dello scadere. Vincono i <b class="t-txt">nascosti</b> se anche uno solo resiste fino alla fine. Poi si vede la classifica di chi ha resistito di più e si può fare la rivincita.</p>
+      <a class="btn primary" href="./">Inizia a giocare</a>
+    </section>
+  </main>
+
+  <footer>
+    <button class="btn" id="prev" type="button">Indietro</button>
+    <div class="dots" id="dots" role="group" aria-label="Passi del tutorial"></div><span class="count" id="count" aria-hidden="true"></span>
+    <button class="btn" id="next" type="button">Avanti</button>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const track = document.getElementById("track");
+  const slides = [...track.querySelectorAll(".slide")];
+  const dots = document.getElementById("dots");
+  const prev = document.getElementById("prev"), next = document.getElementById("next");
+  let cur = 0;
+  slides.forEach((s, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.setAttribute("aria-label", `Passo ${i + 1} di ${slides.length}`);
+    b.addEventListener("click", () => go(i));
+    dots.appendChild(b);
+  });
+  function go(i) {
+    i = Math.max(0, Math.min(slides.length - 1, i));
+    track.scrollTo({ left: i * track.clientWidth, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    update(i);
+  }
+  function update(i) {
+    cur = i;
+    [...dots.children].forEach((d, j) => (j === i ? d.setAttribute("aria-current", "step") : d.removeAttribute("aria-current")));
+    prev.disabled = i === 0;
+    document.getElementById("count").textContent = `${i + 1} / ${slides.length}`;
+    next.textContent = i === slides.length - 1 ? "Gioca" : "Avanti";
+    slides.forEach((s, j) => s.setAttribute("aria-hidden", String(j !== i)));
+  }
+  let t = null;
+  track.addEventListener("scroll", () => {
+    clearTimeout(t);
+    t = setTimeout(() => update(Math.round(track.scrollLeft / track.clientWidth)), 80);
+  }, { passive: true });
+  prev.addEventListener("click", () => go(cur - 1));
+  next.addEventListener("click", () => (cur === slides.length - 1 ? (location.href = "./") : go(cur + 1)));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight") go(cur + 1);
+    if (e.key === "ArrowLeft") go(cur - 1);
+  });
+  window.addEventListener("resize", () => track.scrollTo({ left: cur * track.clientWidth }));
+  try { localStorage.setItem("mh_tutorial", "1"); } catch (e) {}
+  update(0);
+})();
+</script>
+</body>
+</html>

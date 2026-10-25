@@ -558,7 +558,7 @@ function renderLobby() {
     <header class="lobby-top">
       <div class="eyebrow">Codice partita</div>
       <div class="bigcode">${esc(code)}</div>
-      <button class="btn small" data-act="copy">Invita amici</button>
+      <div class="lobby-actions"><button class="btn small" data-act="copy">Invita amici</button><a class="btn small ghost" href="tutorial.html">Come si gioca</a></div>
     </header>
     ${gpsNotice()}
     ${pushNotice()}
