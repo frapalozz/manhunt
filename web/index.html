@@ -139,7 +139,7 @@ button.chip{cursor:pointer}
 .sheet{position:relative;z-index:1;max-height:46%;overflow-y:auto;background:var(--surface);border-top:1px solid var(--line);padding-left:max(16px,var(--sal));padding-right:max(16px,var(--sar));padding-block:14px calc(14px + var(--sab));display:flex;flex-direction:column;gap:14px;-webkit-overflow-scrolling:touch}
 .sheet h3{font-size:18px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .targets{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.targets li{display:grid;grid-template-columns:12px 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.targets li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .targets li:last-child{border-bottom:0}
 .dot{width:12px;height:12px;border-radius:50%;background:var(--hide)}
 .dot.caught{background:transparent;border:2px solid var(--muted)}
@@ -174,19 +174,32 @@ button.chip{cursor:pointer}
 .mk-wrap{background:none;border:0}
 .mk{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;pointer-events:none}
 .mk.me{width:18px;height:18px;border-radius:50%;background:#3d8bff;border:3px solid #fff;box-shadow:0 0 0 6px rgba(61,139,255,.25)}
-.mk.mate{width:26px;height:26px;border-radius:50%;background:var(--blaze);color:var(--blaze-ink);border:2px solid #fff;display:grid;place-items:center;font-weight:700;font-size:12px}
+.mk.mate{min-width:26px;height:26px;padding:0 4px;border-radius:50%;background:var(--blaze);color:var(--blaze-ink);border:2px solid #fff;display:grid;place-items:center;font-weight:700;font-size:12px}
 .mk.ping{display:flex;flex-direction:column;align-items:center}
-.mk.ping .pin{width:22px;height:22px;border-radius:50%;background:var(--hide);border:3px solid #0b1410;position:relative}
-.mk.ping.fresh .pin::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:3px solid var(--hide);animation:ripple 1.6s ease-out infinite}
+.mk.ping .pin{width:30px;height:30px;border-radius:50%;background:var(--c,var(--hide));color:#0b1410;border:2px solid #0b1410;position:relative;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:.02em;line-height:1}
+.mk.ping.fresh .pin::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:3px solid var(--c,var(--hide));animation:ripple 1.6s ease-out infinite}
 .mk.ping .lb{margin-top:4px;background:#0b1410;color:#eef1e4;font-size:12px;font-weight:700;padding:2px 7px;border-radius:6px}
-.mk.ping .lb i{font-style:normal;color:#9ad8c6;font-weight:400;margin-left:4px}
+.mk.ping .lb i{font-style:normal;color:var(--c,#9ad8c6);font-weight:400;margin-left:4px}
 .mk.old{opacity:.55}
-.mk.old .pin{width:12px;height:12px;border-width:2px}
+.mk.old .pin{width:12px;height:12px;border-width:2px;font-size:0}
+.mk.ping.stale .pin{box-shadow:0 0 0 2px #ff5c5c}
 @keyframes ripple{from{transform:scale(1);opacity:.9}to{transform:scale(3.2);opacity:0}}
 
 .conn{position:fixed;z-index:2000;top:calc(var(--sat) + 8px);left:50%;transform:translateX(-50%);background:var(--danger);color:#1a0505;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px}
 .toast{position:fixed;z-index:2000;left:50%;transform:translateX(-50%);bottom:calc(var(--sab) + 18px);width:min(92vw,440px);background:var(--fg);color:var(--bg);font-weight:700;padding:14px 16px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
 .leaflet-container{font-family:var(--f-body)}
+/* vista mappa / radar */
+#radar{position:absolute;inset:0;width:100%;height:100%;display:block;background:var(--surface);touch-action:none}
+.viewsw{position:absolute;left:max(12px,var(--sal));bottom:12px;z-index:500;display:flex;background:var(--bg);border:1.5px solid var(--line);border-radius:999px;padding:3px;gap:2px}
+.viewsw button{appearance:none;border:0;background:transparent;color:var(--muted);font-weight:700;font-size:14px;padding:7px 13px;border-radius:999px;cursor:pointer}
+.viewsw button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.viewsw button:focus-visible,#btn-compass:focus-visible{outline:3px solid var(--blaze);outline-offset:2px}
+#btn-compass[aria-pressed="true"]{background:var(--blaze);border-color:var(--blaze);color:var(--blaze-ink)}
+/* iniziali colorate dei giocatori */
+.ini{flex:none;width:30px;height:30px;border-radius:50%;background:var(--c,var(--hide));color:#0b1410;display:inline-grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:.02em;line-height:1;vertical-align:middle}
+.ini.sm{width:24px;height:24px;font-size:11px}
+.ini.stale{box-shadow:0 0 0 2px var(--danger)}
+
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 /* web app con server */
@@ -244,8 +257,14 @@ button.chip{cursor:pointer}
   <div class="hud" id="hud"></div>
   <div class="mapwrap">
     <div id="map"></div>
+    <canvas id="radar" hidden aria-label="Radar con la direzione dei giocatori"></canvas>
     <div id="overlay" class="overlay" hidden></div>
-    <button class="fab" data-act="center">Centra</button>
+    <div class="viewsw" role="group" aria-label="Vista">
+      <button type="button" data-act="view" data-v="map" aria-pressed="true">Mappa</button>
+      <button type="button" data-act="view" data-v="radar" aria-pressed="false">Radar</button>
+    </div>
+    <button class="fab" data-act="center" id="btn-center">Centra</button>
+    <button class="fab" data-act="compass" id="btn-compass" aria-pressed="false" hidden>Bussola</button>
   </div>
   <div class="sheet" id="sheet"></div>
 </section>

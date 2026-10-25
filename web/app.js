@@ -12,7 +12,41 @@ const PING_OPTS = [30, 60, 90, 120, 180, 300, 600];
 const HIDE_OPTS = [30, 60, 120, 180, 300, 600];
 const DUR_OPTS = [10, 15, 20, 30, 45, 60, 90, 120];
 const MISS_OPTS = [0, 1, 2, 3, 5];
-const COL = { hide: "#9ad8c6", danger: "#ff5c5c" };
+const COL = { hide: "#9ad8c6", danger: "#ff5c5c", blaze: "#ff6b1a" };
+// colori dei nascosti (l'arancione resta riservato ai cercatori, il rosso agli avvisi)
+const PALETTE = ["#9ad8c6", "#ff7eb6", "#ffd23f", "#6cb4ff", "#c39bff", "#8ee06a", "#f2f2f2", "#d9a679"];
+
+const chars = (w) => Array.from(w || "");
+function baseIni(name, n) {
+  const words = String(name || "?").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "?";
+  const out = n === 1 ? chars(words[0])[0] : words.length > 1 ? chars(words[0])[0] + chars(words[1])[0] : chars(words[0]).slice(0, 2).join("");
+  return out.toUpperCase();
+}
+/** Iniziali uniche (1 lettera, 2 se serve, poi un numero) e colore stabile per ogni giocatore. */
+let looksKey = "", looksVal = {};
+function looks() {
+  if (!game) return {};
+  const P = game.players;
+  const ids = Object.keys(P).sort((a, b) => P[a].joinedAt - P[b].joinedAt || (a < b ? -1 : 1));
+  const key = ids.map((i) => i + ":" + P[i].name + ":" + (P[i].origRole || P[i].role)).join("|");
+  if (key === looksKey) return looksVal;
+  const ini = {};
+  ids.forEach((i) => (ini[i] = baseIni(P[i].name, 1)));
+  const dupes = (m) => { const c = {}; Object.values(m).forEach((v) => (c[v] = (c[v] || 0) + 1)); return c; };
+  let c = dupes(ini);
+  ids.forEach((i) => { if (c[ini[i]] > 1) ini[i] = baseIni(P[i].name, 2); });
+  c = dupes(ini); const seen = {};
+  ids.forEach((i) => { if (c[ini[i]] > 1) { seen[ini[i]] = (seen[ini[i]] || 0) + 1; ini[i] = ini[i].slice(0, 2) + seen[ini[i]]; } });
+  // i colori seguono l'ordine dei nascosti iniziali, così restano gli stessi per tutta la partita
+  const hid = ids.filter((i) => (P[i].origRole || P[i].role) === "hider"), rest = ids.filter((i) => !hid.includes(i));
+  const out = {};
+  [...hid, ...rest].forEach((i, n) => (out[i] = { ini: ini[i], color: PALETTE[n % PALETTE.length] }));
+  looksKey = key; looksVal = out;
+  return out;
+}
+const look = (id) => looks()[id] || { ini: "?", color: COL.hide };
+const iniBadge = (id, extra = "") => { const l = look(id); return `<span class="ini ${extra}" style="--c:${l.color}">${esc(l.ini)}</span>`; };
 
 const $ = (s) => document.querySelector(s);
 const store = {
@@ -427,6 +461,8 @@ document.addEventListener("click", async (e) => {
     case "caughtby": picking = false; renderSheet(); act("catch", { hider: uid, by: id === "?" ? null : id }); break;
     case "respond": respondPing(); break;
     case "center": fitted = false; scheduleMap(); break;
+    case "view": view = b.dataset.v === "radar" ? "radar" : "map"; store.set("mh_view", view); applyView(); break;
+    case "compass": toggleCompass(); break;
     case "rematch": act("rematch"); break;
   }
 });
@@ -478,7 +514,7 @@ function show(name) {
   if (screen === name) return;
   screen = name;
   for (const s of ["boot", "home", "lobby", "game", "end"]) $("#s-" + s).hidden = s !== name;
-  if (name === "game") { initMap(); setTimeout(() => { map && map.invalidateSize(); fitted = false; scheduleMap(); }, 60); }
+  if (name === "game") { initMap(); applyView(); setTimeout(() => { map && map.invalidateSize(); fitted = false; scheduleMap(); }, 60); }
 }
 function render() {
   if (!uid) { show("boot"); return; }
@@ -522,7 +558,7 @@ function renderLobby() {
         const chip = isHost
           ? `<button class="chip ${p.role}" data-act="role" data-id="${esc(id)}" aria-label="Cambia squadra di ${esc(p.name)}">${p.role === "seeker" ? "Cercatore" : "Nascosto"}</button>`
           : `<span class="chip ${p.role}">${p.role === "seeker" ? "Cercatore" : "Nascosto"}</span>`;
-        return `<li><span class="nm">${esc(p.name)}${tag ? `<small>${tag}</small>` : ""}</span>${chip}${isHost && id !== uid ? `<button class="x" data-act="kick" data-id="${esc(id)}" aria-label="Rimuovi ${esc(p.name)}">×</button>` : ""}</li>`;
+        return `<li>${p.role === "hider" ? iniBadge(id, "sm") : ""}<span class="nm">${esc(p.name)}${tag ? `<small>${tag}</small>` : ""}</span>${chip}${isHost && id !== uid ? `<button class="x" data-act="kick" data-id="${esc(id)}" aria-label="Rimuovi ${esc(p.name)}">×</button>` : ""}</li>`;
       }).join("")}
     </ul>
     ${isHost && n > 1 ? `<div class="card"><label>Squadre casuali</label><div class="row" style="align-items:center;justify-content:space-between;flex-wrap:wrap">
@@ -592,7 +628,7 @@ function renderSheet() {
       } else if (latest) info = `<span class="stale">non ha mai inviato la posizione</span>`;
       const missed = P[id].missed ? `<span class="badge ${max && P[id].missed >= max - 1 ? "bad" : ""}">${P[id].missed} saltat${P[id].missed === 1 ? "o" : "i"}</span>` : "";
       const key = "found:" + id, on = isArmed(key);
-      return `<li><span class="dot"></span><span class="t"><b>${esc(P[id].name)}${missed}</b><span>${info}</span></span>
+      return `<li>${iniBadge(id, latest && latest.stale ? "stale" : "")}<span class="t"><b>${esc(P[id].name)}${missed}</b><span>${info}</span></span>
         <button class="btn small ${on ? "armed" : ""}" data-act="found" data-id="${esc(id)}" ${t < game.hideEnd ? "disabled" : ""}>${on ? "Conferma" : "Preso!"}</button></li>`;
     }).join("")}</ul>` : `<p class="muted">Nessuno in fuga.</p>`;
     html += `<h3>Squadra cercatori</h3><div class="team">${seekers.map((id) => `<span class="${id === uid ? "me" : ""}">${esc(P[id].name)}${id === uid ? " (tu)" : ""}</span>`).join("")}</div>`;
@@ -609,6 +645,7 @@ function renderSheet() {
       <span class="eyebrow">${t < game.hideEnd ? "Primo ping tra" : "Prossimo ping tra"}</span>
       <div class="big ${rem <= 10000 ? "soon" : ""}">${fmt(rem)}</div>
       <span class="muted small">${last ? `Ultimo ping ${ago(last.t)}: è l'ultima posizione che vedono i cercatori.` : "I cercatori non hanno ancora la tua posizione."}</span>
+      <span class="muted small" style="display:flex;align-items:center;gap:8px">Sulla mappa dei cercatori sei ${iniBadge(uid, "sm")}</span>
       ${max ? `<span class="muted small">Ping saltati: <b>${me.missed || 0}</b> su ${max} prima della squalifica.</span>` : ""}
       ${gps !== "ok" ? gpsNotice() : ""}
       ${pushState !== "ready" ? pushNotice() : ""}
@@ -648,7 +685,7 @@ function renderEnd() {
 }
 
 /* ============ mappa ============ */
-let map = null, layer = null, fitted = false, mapQueued = false;
+let map = null, layer = null, fitted = false, mapQueued = false, fitSig = "";
 function initMap() {
   if (map) return;
   const el = $("#map");
@@ -675,21 +712,22 @@ function drawMap() {
     const all = byHider[id] || [], arr = all.filter((p) => !p.nofix);
     if (!arr.length) continue;
     const latest = all[all.length - 1], stale = latest && latest.stale;
+    const lk = look(id), cs = `--c:${lk.color}`;
     const ll = arr.map((e) => [e.lat, e.lng]);
-    if (ll.length > 1) L.polyline(ll, { color: COL.hide, weight: 3, opacity: 0.7, dashArray: "6 8" }).addTo(layer);
-    arr.slice(0, -1).forEach((e) => L.marker([e.lat, e.lng], { icon: icon(`<div class="mk ping old"><div class="pin"></div></div>`), interactive: false }).addTo(layer));
+    if (ll.length > 1) L.polyline(ll, { color: lk.color, weight: 3, opacity: 0.75, dashArray: "6 8" }).addTo(layer);
+    arr.slice(0, -1).forEach((e) => L.marker([e.lat, e.lng], { icon: icon(`<div class="mk ping old" style="${cs}"><div class="pin"></div></div>`), interactive: false }).addTo(layer));
     const last = arr[arr.length - 1];
-    if (last.acc && last.acc > 15) L.circle([last.lat, last.lng], { radius: last.acc, color: stale ? COL.danger : COL.hide, weight: 1, fillOpacity: 0.08, interactive: false }).addTo(layer);
+    if (last.acc && last.acc > 15) L.circle([last.lat, last.lng], { radius: last.acc, color: stale ? COL.danger : lk.color, weight: 1, fillOpacity: 0.08, interactive: false }).addTo(layer);
     const fresh = t - last.t < 12000;
     const nm = id === uid ? "Tu (come ti vedono)" : P[id].name;
     const lbl = stale ? `posizione ${ago(last.fix_at || last.t)}` : ago(last.t);
-    L.marker([last.lat, last.lng], { icon: icon(`<div class="mk ping ${fresh ? "fresh" : ""}"><div class="pin"></div><div class="lb">${esc(nm)}<i>${esc(lbl)}</i></div></div>`), interactive: false, zIndexOffset: 500 }).addTo(layer);
+    L.marker([last.lat, last.lng], { icon: icon(`<div class="mk ping ${fresh ? "fresh" : ""} ${stale ? "stale" : ""}" style="${cs}"><div class="pin">${esc(lk.ini)}</div><div class="lb">${esc(nm)}<i>${esc(lbl)}</i></div></div>`), interactive: false, zIndexOffset: 500 }).addTo(layer);
     pts.push([last.lat, last.lng]);
   }
   if (role === "seeker") {
     for (const [id, m] of Object.entries(mates)) {
       if (!P[id] || P[id].role !== "seeker" || t - m.t > 60000) continue;
-      L.marker([m.lat, m.lng], { icon: icon(`<div class="mk mate">${esc((P[id].name || "?").slice(0, 1).toUpperCase())}</div>`), interactive: false }).addTo(layer);
+      L.marker([m.lat, m.lng], { icon: icon(`<div class="mk mate">${esc(look(id).ini)}</div>`), interactive: false }).addTo(layer);
       pts.push([m.lat, m.lng]);
     }
   }
@@ -697,10 +735,181 @@ function drawMap() {
     L.marker([myPos.lat, myPos.lng], { icon: icon(`<div class="mk me"></div>`), interactive: false, zIndexOffset: 1000 }).addTo(layer);
     pts.push([myPos.lat, myPos.lng]);
   }
+  // nuovi ping (o un nuovo nascosto in lista): riadatto la vista per mostrarli tutti
+  const sig = ids.map((id) => { const a = byHider[id] || []; return id + ":" + (a.length ? a[a.length - 1].k : "-"); }).join("|");
+  if (sig !== fitSig) { fitSig = sig; fitted = false; }
   if (!fitted && pts.length) {
     fitted = true;
     if (pts.length === 1) map.setView(pts[0], 17); else map.fitBounds(pts, { padding: [50, 50], maxZoom: 18 });
   }
+}
+
+/* ============ vista: mappa normale o radar ============ */
+let view = store.get("mh_view", "map") === "radar" ? "radar" : "map";
+function applyView() {
+  $("#map").hidden = view !== "map";
+  $("#radar").hidden = view !== "radar";
+  document.querySelectorAll('[data-act="view"]').forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === view)));
+  $("#btn-center").hidden = view !== "map";
+  $("#btn-compass").hidden = view !== "radar";
+  $("#btn-compass").setAttribute("aria-pressed", String(compassOn));
+  $("#btn-compass").textContent = compassOn ? "Bussola attiva" : "Bussola";
+  if (view === "map") { if (map) { map.invalidateSize(); scheduleMap(); } }
+  else startRadar();
+}
+
+/* ---------- bussola (orientamento del telefono) ---------- */
+let compassOn = false, heading = null, lastHeadingAt = 0;
+function onOrientation(e) {
+  let h = null;
+  if (typeof e.webkitCompassHeading === "number" && !isNaN(e.webkitCompassHeading)) h = e.webkitCompassHeading; // iPhone
+  else if (e.absolute && typeof e.alpha === "number") h = 360 - e.alpha;                                         // Android
+  if (h == null) return;
+  const so = (window.screen && window.screen.orientation && window.screen.orientation.angle) || window.orientation || 0;
+  h = (((h + so) % 360) + 360) % 360;
+  if (heading == null) heading = h;
+  else { const d = ((h - heading + 540) % 360) - 180; heading = (heading + d * 0.25 + 360) % 360; } // attenua i tremolii
+  lastHeadingAt = Date.now();
+}
+async function toggleCompass() {
+  if (compassOn) {
+    compassOn = false; heading = null;
+    window.removeEventListener("deviceorientationabsolute", onOrientation, true);
+    window.removeEventListener("deviceorientation", onOrientation, true);
+    applyView(); return;
+  }
+  try {
+    if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+      const r = await DeviceOrientationEvent.requestPermission();
+      if (r !== "granted") { toast("Bussola non consentita: il radar resta con il nord in alto."); return; }
+    }
+  } catch (e) { toast("Bussola non disponibile su questo telefono."); return; }
+  compassOn = true; heading = null; lastHeadingAt = 0;
+  window.addEventListener("deviceorientationabsolute", onOrientation, true);
+  window.addEventListener("deviceorientation", onOrientation, true);
+  applyView();
+  setTimeout(() => { if (compassOn && !lastHeadingAt) { toast("Bussola non disponibile su questo telefono: il radar resta con il nord in alto."); toggleCompass(); } }, 3000);
+}
+
+/* ---------- radar ---------- */
+let radarRunning = false, radarLast = 0;
+const reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const RADAR_STEPS = [40, 80, 100, 200, 400, 600, 800, 1000, 1200, 2000, 3000, 4000, 6000, 8000, 10000, 20000, 40000]; // ogni cerchio = un quarto
+function cssVar(n, d) { const v = getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return v || d; }
+function startRadar() {
+  if (radarRunning) return;
+  radarRunning = true;
+  const loop = (ts) => {
+    if (screen !== "game" || view !== "radar") { radarRunning = false; return; }
+    if (ts - radarLast > (reduceMotion ? 1000 : 50) && document.visibilityState === "visible") { radarLast = ts; drawRadar(ts); }
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
+function radarBlips() {
+  const P = game.players, role = myRole(), t = now(), out = [];
+  const ids = role === "seeker" ? Object.keys(P).filter((i) => P[i].role === "hider") : [uid];
+  for (const id of ids) {
+    const all = byHider[id] || [], fixes = all.filter((p) => !p.nofix), last = fixes[fixes.length - 1];
+    if (!last) continue;
+    const latest = all[all.length - 1];
+    out.push({ id, kind: "hider", lat: last.lat, lng: last.lng, stale: !!(latest && latest.stale), fresh: t - last.t < 12000, ...look(id) });
+  }
+  if (role === "seeker") for (const [id, m] of Object.entries(mates)) {
+    if (!P[id] || P[id].role !== "seeker" || t - m.t > 60000) continue;
+    out.push({ id, kind: "mate", lat: m.lat, lng: m.lng, ini: look(id).ini, color: COL.blaze });
+  }
+  return out;
+}
+function drawRadar(ts) {
+  const cv = $("#radar"); if (!cv || cv.hidden || !game) return;
+  const W = cv.clientWidth, H = cv.clientHeight; if (!W || !H) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const bg = cssVar("--surface", "#1b2117"), line = cssVar("--line", "#343e2d"), muted = cssVar("--muted", "#9ba68e"), fg = cssVar("--fg", "#eef1e4"), ink = "#0b1410";
+  const font = (w, px) => `${w} ${px}px "Atkinson Hyperlegible", system-ui, sans-serif`;
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  // spazio libero: sopra la legenda e il Nord, sotto i pulsanti Mappa/Radar e Bussola
+  const top = 36, bottom = 64;
+  const R = Math.max(40, Math.min((W - 64) / 2, (H - top - bottom) / 2)), cx = W / 2, cy = top + Math.max(R, (H - top - bottom) / 2);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  if (!myPos) { ctx.fillStyle = muted; ctx.font = font(400, 14); ctx.fillText("Aspetto il GPS per mostrare il radar…", cx, cy); return; }
+
+  const blips = radarBlips().map((b) => ({ ...b, d: dist(myPos, b), br: bearing(myPos, b) }));
+  const maxD = blips.reduce((m, b) => Math.max(m, b.d), 0);
+  const scale = RADAR_STEPS.find((v) => v >= maxD * 1.12) || RADAR_STEPS[RADAR_STEPS.length - 1];
+  const live = compassOn && heading != null;
+  const rot = live ? heading : 0;
+  const at = (brg, r) => { const a = ((brg - rot) * Math.PI) / 180; return [cx + r * Math.sin(a), cy - r * Math.cos(a)]; };
+
+  // cerchi di distanza e assi
+  ctx.lineWidth = 1;
+  for (let i = 1; i <= 4; i++) {
+    ctx.strokeStyle = line; ctx.globalAlpha = i === 4 ? 1 : 0.7;
+    ctx.beginPath(); ctx.arc(cx, cy, (R * i) / 4, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.globalAlpha = 0.5;
+  for (const b of [0, 90]) { const [x1, y1] = at(b, R), [x2, y2] = at(b + 180, R); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = muted; ctx.font = font(400, 11); ctx.textAlign = "left";
+  for (let i = 1; i <= 4; i++) { const [x, y] = at(rot + 135, (R * i) / 4); ctx.fillText(fmtDist((scale * i) / 4), x + 4, y); }
+  ctx.textAlign = "center";
+
+  // fascio che ruota
+  if (!reduceMotion && ctx.createConicGradient) {
+    const a = ((ts / 3500) % 1) * Math.PI * 2;
+    const g = ctx.createConicGradient(a - Math.PI / 2 - 0.9, cx, cy);
+    g.addColorStop(0, "rgba(255,107,26,0)"); g.addColorStop(0.14, "rgba(255,107,26,0.16)"); g.addColorStop(0.145, "rgba(255,107,26,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // punti cardinali
+  ctx.font = font(700, 13);
+  [["N", 0], ["E", 90], ["S", 180], ["O", 270]].forEach(([k, b]) => {
+    const [x, y] = at(b, R + 15);
+    ctx.fillStyle = k === "N" ? COL.blaze : muted; ctx.fillText(k, x, y);
+  });
+
+  // io al centro (con il cono della direzione se la bussola è attiva)
+  if (live) {
+    ctx.fillStyle = "rgba(61,139,255,0.22)"; ctx.beginPath(); ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, Math.min(70, R * 0.45), -Math.PI / 2 - 0.4, -Math.PI / 2 + 0.4); ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = "#3d8bff"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+  // giocatori: prima i compagni, sopra i nascosti
+  blips.sort((a, b) => (a.kind === b.kind ? b.d - a.d : a.kind === "mate" ? -1 : 1));
+  for (const b of blips) {
+    const r = Math.min(R, (b.d / scale) * R);
+    const [x, y] = at(b.br, r);
+    const big = b.kind === "hider", rad = big ? 16 : 12;
+    if (big && b.fresh && !reduceMotion) {
+      const p = (ts % 1600) / 1600;
+      ctx.strokeStyle = b.color; ctx.globalAlpha = 1 - p; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(x, y, rad + p * 22, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    ctx.globalAlpha = b.stale ? 0.6 : 1;
+    ctx.fillStyle = b.color; ctx.strokeStyle = b.stale ? COL.danger : ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = ink; ctx.font = font(800, big ? 12 : 10);
+    ctx.fillText(b.ini, x, y + 0.5);
+    ctx.globalAlpha = 1;
+    if (big) {
+      const txt = (b.id === uid ? "tu · " : "") + fmtDist(b.d);
+      ctx.font = font(700, 11);
+      const w = ctx.measureText(txt).width + 10, ly = y + rad + 11;
+      ctx.fillStyle = "rgba(11,20,16,0.85)"; ctx.fillRect(x - w / 2, ly - 8, w, 16);
+      ctx.fillStyle = b.stale ? COL.danger : fg; ctx.fillText(txt, x, ly);
+    }
+  }
+
+  // legenda
+  ctx.textAlign = "left"; ctx.font = font(400, 11); ctx.fillStyle = muted;
+  ctx.fillText(live ? "Ruota con il telefono" : "Nord in alto", 10, 16);
+  if (!blips.some((b) => b.kind === "hider")) { ctx.textAlign = "center"; ctx.font = font(400, 13); ctx.fillText(game && now() < game.hideEnd ? "I nascosti compaiono al primo ping" : "Nessuna posizione da mostrare", cx, cy + R * 0.55); }
 }
 
 render();

@@ -86,6 +86,15 @@ Tutti aprono il link nel browser, scrivono il nome e consentono **posizione** e 
 3. **Inizia la caccia.** I nascosti scappano e possono bloccare il telefono.
 4. Per una cattura: il cercatore tocca **Preso!** due volte, oppure il nascosto tocca **Mi hanno preso**.
 
+## Mappa e radar
+
+Durante la partita, in basso a sinistra, puoi scegliere tra due viste:
+
+- **Mappa:** la mappa OpenStreetMap con le tracce dei ping.
+- **Radar:** sei al centro e ogni giocatore appare nella sua direzione, con la distanza. I cerchi indicano un quarto del raggio ciascuno, e la scala si adatta da sola al nascosto più lontano. Con **Bussola** il radar ruota con il telefono, così quello che è in alto sul radar è davanti a te. Su iPhone la prima volta compare la richiesta di accesso all'orientamento.
+
+Ogni nascosto è indicato dalle sue **iniziali in un colore suo** (uguale su mappa, radar e lista). Le iniziali sono sempre diverse: se due nomi iniziano con la stessa lettera si usano due lettere, per esempio BR e BE. I cercatori della tua squadra sono in arancione. Un contorno rosso indica un nascosto che non ha risposto all'ultimo ping.
+
 ## Limiti del piano gratuito
 
 - **Pausa dopo 7 giorni di inattività**: se nessuno gioca per una settimana, Supabase mette in pausa il progetto. Basta riattivarlo dal pannello (Restore project) prima di giocare.
