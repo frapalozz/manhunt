@@ -165,6 +165,9 @@ select cron.schedule('manhunt-cleanup', '17 3 * * *', $$
   delete from public.push_subs where created_at < now() - interval '60 days';
   delete from auth.users where is_anonymous and created_at < now() - interval '30 days';
   delete from net._http_response where created < now() - interval '1 day';
+  -- il timer gira ogni 5 secondi e Supabase registra ogni esecuzione: senza questa pulizia
+  -- lo storico crescerebbe di ~17.000 righe al giorno fino a riempire il database gratuito
+  delete from cron.job_run_details where end_time < now() - interval '1 day';
 $$);
 
 -- =====================================================================
